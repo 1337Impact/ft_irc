@@ -26,6 +26,7 @@ int main()
 
 	std::vector<struct pollfd> cons(
 		1, (struct pollfd){.fd = sockfd, .events = POLLIN});
+	std::map<int, std::string> bufs;
 
 	for (int evts; (evts = poll(cons.data(), cons.size(), -1));)
 	{
@@ -67,6 +68,7 @@ int main()
 					cons.erase(con, con + 1);
 					break;
 				}
+				bufs[con->fd].append(buf);
 				if (buf[nbytes - 1] == '\n')
 				{
 					for (std::vector<struct pollfd>::const_iterator oth =
@@ -74,10 +76,15 @@ int main()
 						 oth != cons.cend();
 						 oth++)
 						if (oth->fd != con->fd &&
-							send(oth->fd, buf, nbytes, 0) == -1)
+							send(oth->fd,
+								 bufs[con->fd].data(),
+								 bufs[con->fd].size(),
+								 0) == -1)
 							perror("send");
 					break;
 				}
+				if (nbytes < 512)
+					break;
 			}
 		}
 	}
