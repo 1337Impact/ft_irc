@@ -21,19 +21,19 @@ int main()
 
 
     bind(sockfd, (struct sockaddr *)&my_addr, sizeof(my_addr));
+
     listen(sockfd, 1);
-
-
+    unsigned addr_size = sizeof their_addr;
+    int new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size);
+    char buff[100];
     while (1){
-
-        unsigned addr_size = sizeof their_addr;
-        int new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size);
-        for (int i = 0; i < len; i++)
-        {
-            char buff[100];
-            read(new_fd, buff, 100);
-            printf("%s\n", buff);
-
-        }
+        bzero(buff, 100);
+        if (read(new_fd, buff, 100) == 0)
+            exit(0);
+        printf("%s", buff);
+        bzero(buff, 100);
+        read(0, buff, 100);
+        write(new_fd, buff, 100);
     }
+
 }
