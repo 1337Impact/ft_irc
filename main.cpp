@@ -81,6 +81,7 @@ int main()
 								 bufs[con->fd].size(),
 								 0) == -1)
 							perror("send");
+					bufs[con->fd].clear();
 					break;
 				}
 				if (nbytes < 512)
