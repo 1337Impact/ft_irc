@@ -1,12 +1,10 @@
 #include <arpa/inet.h>
-#include <cstdio>
 #include <iostream>
+#include <map>
 #include <sys/fcntl.h>
 #include <sys/poll.h>
 #include <unistd.h>
 #include <vector>
-#include <map>
-#include <string>
 
 int main()
 {
@@ -24,8 +22,10 @@ int main()
 	bind(sockfd, (struct sockaddr *)&my_addr, sizeof(my_addr));
 	listen(sockfd, 1);
 
-	std::vector<struct pollfd> cons(
-		1, (struct pollfd){.fd = sockfd, .events = POLLIN});
+	struct pollfd con;
+	con.events = POLLIN;
+	con.fd = sockfd;
+	std::vector<struct pollfd> cons(1, con);
 	std::map<int, std::string> bufs;
 
 	for (int evts; (evts = poll(cons.data(), cons.size(), -1));)
@@ -35,12 +35,11 @@ int main()
 			perror("poll");
 			break;
 		}
-		if ((cons.front().revents & POLLIN) == POLLIN)
+		if (cons.front().revents & POLLIN)
 		{
-			unsigned addr_size = sizeof their_addr;
-			struct pollfd con = {.events = POLLIN};
+			unsigned addr_size = sizeof(their_addr);
+			con.events = POLLIN;
 			con.fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size);
-			std::cout << con.fd << std::endl;
 			if (con.fd == -1)
 			{
 				perror("accept");
@@ -53,13 +52,13 @@ int main()
 			 evts && con != cons.cend();
 			 con++)
 		{
-			if ((con->revents & POLLIN) != POLLIN)
+			if (!(con->revents & POLLIN))
 				continue;
 			evts--;
 			for (char buf[512];;)
 			{
-				bzero(buf, sizeof buf);
-				int nbytes = recv(con->fd, buf, sizeof buf, 0);
+				bzero(buf, sizeof(buf));
+				int nbytes = recv(con->fd, buf, sizeof(buf), 0);
 				if (nbytes <= 0)
 				{
 					if (nbytes == -1)
@@ -81,7 +80,7 @@ int main()
 								 bufs[con->fd].size(),
 								 0) == -1)
 							perror("send");
-					bufs[con->fd].clear();
+					bufs.erase(con->fd);
 					break;
 				}
 				if (nbytes < 512)
