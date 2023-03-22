@@ -26,7 +26,6 @@ int main()
 
 	std::vector<struct pollfd> cons(
 		1, (struct pollfd){.fd = sockfd, .events = POLLIN});
-	std::map<int, std::string> reqs;
 
 	for (int evts; (evts = poll(cons.data(), cons.size(), -1));)
 	{
@@ -35,11 +34,12 @@ int main()
 			perror("poll");
 			break;
 		}
-		if (cons.front().revents & POLLIN)
+		if ((cons.front().revents & POLLIN) == POLLIN)
 		{
 			unsigned addr_size = sizeof their_addr;
 			struct pollfd con = {.events = POLLIN};
 			con.fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size);
+			std::cout << con.fd << std::endl;
 			if (con.fd == -1)
 			{
 				perror("accept");
@@ -52,7 +52,7 @@ int main()
 			 evts && con != cons.cend();
 			 con++)
 		{
-			if (con->revents & POLLIN)
+			if ((con->revents & POLLIN) != POLLIN)
 				continue;
 			evts--;
 			for (char buf[512];;)
@@ -69,22 +69,13 @@ int main()
 				}
 				if (buf[nbytes - 1] == '\n')
 				{
-					reqs[con->fd].append(buf);
 					for (std::vector<struct pollfd>::const_iterator oth =
 							 cons.cbegin() + 1;
-						 con != cons.cend();
-						 con++)
-						if (send(con->fd,
-								 reqs[con->fd].data(),
-								 reqs[con->fd].size(),
-								 0) == -1)
+						 oth != cons.cend();
+						 oth++)
+						if (oth->fd != con->fd &&
+							send(oth->fd, buf, nbytes, 0) == -1)
 							perror("send");
-                    reqs.erase(con->fd);
-					break;
-				}
-				if (nbytes < 512)
-				{
-					reqs[con->fd].append(buf);
 					break;
 				}
 			}
