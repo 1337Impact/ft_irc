@@ -1,95 +1,115 @@
-#include <arpa/inet.h>
+#include "main.hpp"
 #include <iostream>
-#include <map>
 #include <sys/fcntl.h>
 #include <sys/poll.h>
 #include <unistd.h>
-#include <vector>
 
-int main()
+Server::~Server()
 {
-	int sockfd, port;
-	struct sockaddr_in my_addr;
-	struct sockaddr_storage their_addr;
-	port = 9991;
+	for (std::vector<pollfd>::const_iterator con = cons.cbegin();
+		 con != cons.cend();
+		 con++)
+		if (close(con->fd) == -1)
+			perror("close");
+}
 
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	fcntl(sockfd, F_SETFL, O_NONBLOCK);
+Server::Server(const int port, const std::string &pass)
+	: sockfd(socket(AF_INET, SOCK_STREAM, 0)), pass(pass)
+{
+	if (sockfd == -1)
+		throw std::system_error(std::error_code(errno, std::system_category()),
+								"socket");
+	if (fcntl(sockfd, F_SETFL, O_NONBLOCK) == -1)
+		throw std::system_error(std::error_code(errno, std::system_category()),
+								"fcntl");
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(port);
+	if (bind(sockfd, (sockaddr *)&addr, sizeof(addr)) == -1)
+		throw std::system_error(std::error_code(errno, std::system_category()),
+								"bind");
+	if (listen(sockfd, 1) == -1)
+		throw std::system_error(std::error_code(errno, std::system_category()),
+								"listen");
+	cons.push_back((pollfd){.fd = sockfd, .events = POLLIN});
+}
 
-	my_addr.sin_family = AF_INET;
-	my_addr.sin_port = htons(port);
+void Server::read_sock(std::vector<pollfd>::const_iterator &con)
+{
+	char buf[513];
+	bzero(buf, sizeof(buf));
+	int nbytes = recv(con->fd, buf, sizeof(buf), 0);
+	if (nbytes <= 0 || nbytes == 513)
+	{
+		if (nbytes == -1)
+			perror("recv");
+		if (nbytes == 513)
+			std::cerr << "message too long, connection is be closed" << std::endl;
+		if (close(con->fd) == -1)
+			perror("close");
+		cons.erase(con, con + 1);
+		bufs.erase(con->fd);
+	}
+	else
+	{
+		bufs[con->fd].append(buf);
+		if (nbytes > 1 && buf[nbytes - 1] == '\n' && buf[nbytes - 2] == '\r')
+		{
+			for (std::vector<pollfd>::const_iterator oth = cons.cbegin() + 1;
+				 oth != cons.cend();
+				 oth++)
+				if (oth->fd != con->fd)
+					send(oth->fd, bufs[con->fd].data(), bufs[con->fd].size(), 0);
+			bufs.erase(con->fd);
+		}
+	}
+}
 
-	bind(sockfd, (struct sockaddr *)&my_addr, sizeof(my_addr));
-	listen(sockfd, 1);
-
-	struct pollfd con;
-	con.events = POLLIN;
-	con.fd = sockfd;
-	std::vector<struct pollfd> cons(1, con);
-	std::map<int, std::string> bufs;
-
-	for (int evts; (evts = poll(cons.data(), cons.size(), -1));)
+void Server::event_loop()
+{
+	while (int evts = poll(cons.data(), cons.size(), -1))
 	{
 		if (evts == -1)
 		{
 			perror("poll");
-			break;
+			throw std::system_error(
+				std::error_code(errno, std::system_category()), "poll");
 		}
 		if (cons.front().revents & POLLIN)
 		{
-			unsigned addr_size = sizeof(their_addr);
-			con.events = POLLIN;
-			con.fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size);
+			unsigned addr_size = sizeof(oth_addr);
+			pollfd con = {.fd = accept(sockfd, (sockaddr *)&oth_addr, &addr_size),
+						  .events = POLLIN};
 			if (con.fd == -1)
-			{
 				perror("accept");
-				break;
+			else
+			{
+				cons.push_back(con);
+				std::cout << "new connection has been set" << std::endl;
 			}
-			cons.push_back(con);
 			evts--;
 		}
-		for (std::vector<struct pollfd>::const_iterator con = cons.cbegin() + 1;
+		for (std::vector<pollfd>::const_iterator con = cons.cbegin() + 1;
 			 evts && con != cons.cend();
 			 con++)
-		{
-			if (!(con->revents & POLLIN))
-				continue;
-			evts--;
-			for (char buf[512];;)
+			if (con->revents & POLLIN)
 			{
-				bzero(buf, sizeof(buf));
-				int nbytes = recv(con->fd, buf, sizeof(buf), 0);
-				if (nbytes <= 0)
-				{
-					if (nbytes == -1)
-						perror("recv");
-					close(con->fd);
-					cons.erase(con, con + 1);
-					break;
-				}
-				bufs[con->fd].append(buf);
-				if (buf[nbytes - 1] == '\n')
-				{
-					for (std::vector<struct pollfd>::const_iterator oth =
-							 cons.cbegin() + 1;
-						 oth != cons.cend();
-						 oth++)
-						if (oth->fd != con->fd &&
-							send(oth->fd,
-								 bufs[con->fd].data(),
-								 bufs[con->fd].size(),
-								 0) == -1)
-							perror("send");
-					bufs.erase(con->fd);
-					break;
-				}
-				if (nbytes < 512)
-					break;
+				evts--;
+				read_sock(con);
 			}
-		}
 	}
-	for (std::vector<struct pollfd>::const_iterator con = cons.cbegin();
-		 con != cons.cend();
-		 con++)
-		close(con->fd);
+}
+
+int main(int argc, char *argv[])
+{
+	try
+	{
+		if (argc != 3)
+			throw std::invalid_argument("usage: ./ircserv <port> <password>");
+		Server irc(std::atoi(argv[1]), argv[2]);
+		irc.event_loop();
+	}
+	catch (const std::exception &exp)
+	{
+		std::cout << exp.what() << std::endl;
+	}
 }
