@@ -1,39 +1,95 @@
+#include <arpa/inet.h>
 #include <iostream>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <netdb.h>
-#include <netinet/in.h>
+#include <map>
+#include <sys/fcntl.h>
+#include <sys/poll.h>
 #include <unistd.h>
+#include <vector>
 
 int main()
 {
-    
+	int sockfd, port;
+	struct sockaddr_in my_addr;
+	struct sockaddr_storage their_addr;
+	port = 9991;
 
-    int sockfd, port;
-    struct sockaddr_in my_addr;
-    struct sockaddr_storage their_addr;
-    port = 9991;
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	fcntl(sockfd, F_SETFL, O_NONBLOCK);
 
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	my_addr.sin_family = AF_INET;
+	my_addr.sin_port = htons(port);
 
-    my_addr.sin_family = AF_INET;
-    my_addr.sin_port = htons(port);
+	bind(sockfd, (struct sockaddr *)&my_addr, sizeof(my_addr));
+	listen(sockfd, 1);
 
+	struct pollfd con;
+	con.events = POLLIN;
+	con.fd = sockfd;
+	std::vector<struct pollfd> cons(1, con);
+	std::map<int, std::string> bufs;
 
-    bind(sockfd, (struct sockaddr *)&my_addr, sizeof(my_addr));
-
-    listen(sockfd, 1);
-    unsigned addr_size = sizeof their_addr;
-    int new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size);
-    char buff[100];
-    while (1){
-        bzero(buff, 100);
-        if (read(new_fd, buff, 100) == 0)
-            exit(0);
-        printf("%s", buff);
-        bzero(buff, 100);
-        read(0, buff, 100);
-        write(new_fd, buff, 100);
-    }
-
+	for (int evts; (evts = poll(cons.data(), cons.size(), -1));)
+	{
+		if (evts == -1)
+		{
+			perror("poll");
+			break;
+		}
+		if (cons.front().revents & POLLIN)
+		{
+			unsigned addr_size = sizeof(their_addr);
+			con.events = POLLIN;
+			con.fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size);
+			if (con.fd == -1)
+			{
+				perror("accept");
+				break;
+			}
+			cons.push_back(con);
+			evts--;
+		}
+		for (std::vector<struct pollfd>::const_iterator con = cons.cbegin() + 1;
+			 evts && con != cons.cend();
+			 con++)
+		{
+			if (!(con->revents & POLLIN))
+				continue;
+			evts--;
+			for (char buf[512];;)
+			{
+				bzero(buf, sizeof(buf));
+				int nbytes = recv(con->fd, buf, sizeof(buf), 0);
+				if (nbytes <= 0)
+				{
+					if (nbytes == -1)
+						perror("recv");
+					close(con->fd);
+					cons.erase(con, con + 1);
+					break;
+				}
+				bufs[con->fd].append(buf);
+				if (buf[nbytes - 1] == '\n')
+				{
+					for (std::vector<struct pollfd>::const_iterator oth =
+							 cons.cbegin() + 1;
+						 oth != cons.cend();
+						 oth++)
+						if (oth->fd != con->fd &&
+							send(oth->fd,
+								 bufs[con->fd].data(),
+								 bufs[con->fd].size(),
+								 0) == -1)
+							perror("send");
+					bufs.erase(con->fd);
+					break;
+				}
+				if (nbytes < 512)
+					break;
+			}
+		}
+	}
+	for (std::vector<struct pollfd>::const_iterator con = cons.cbegin();
+		 con != cons.cend();
+		 con++)
+		close(con->fd);
 }
