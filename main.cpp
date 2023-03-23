@@ -54,11 +54,7 @@ void Server::read_sock(std::vector<pollfd>::const_iterator &con)
 		bufs[con->fd].append(buf);
 		if (nbytes > 1 && buf[nbytes - 1] == '\n' && buf[nbytes - 2] == '\r')
 		{
-			for (std::vector<pollfd>::const_iterator oth = cons.cbegin() + 1;
-				 oth != cons.cend();
-				 oth++)
-				if (oth->fd != con->fd)
-					send(oth->fd, bufs[con->fd].data(), bufs[con->fd].size(), 0);
+			execute_message(Message(bufs[con->fd]));
 			bufs.erase(con->fd);
 		}
 	}

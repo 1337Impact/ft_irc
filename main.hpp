@@ -7,9 +7,18 @@
 #include <string>
 #include <vector>
 
-class Channel
+class User
 {
+	std::string name;
+};
 
+class Message
+{
+	friend class Server;
+	std::string command;
+	std::string params;
+	std::string prefix;
+	Message(const std::string &msg);
 };
 
 class Server
@@ -21,14 +30,15 @@ class Server
 
 	int sockfd;
 	sockaddr_in addr;
+	sockaddr_storage oth_addr;
 	std::map<int, std::string> bufs;
-	std::set<Channel> channels;
+	std::set<User> users;
 	std::string pass;
 	std::vector<pollfd> cons;
-	sockaddr_storage oth_addr;
 
-	void register_sock();
+	void execute_message(const Message &msg);
 	void read_sock(std::vector<pollfd>::const_iterator &con);
+	void register_sock();
 
   public:
 	~Server();
