@@ -1,74 +1,65 @@
 #ifndef IRCSERV_HPP
 #define IRCSERV_HPP
 
+#include "message.hpp"
+#include <exception>
 #include <map>
 #include <netinet/in.h>
-#include <set>
 #include <string>
-#include <vector>
-#include <iostream>
-#include <cstring>
-#include <sys/fcntl.h>
 #include <sys/poll.h>
-#include <unistd.h>
+#include <vector>
 
 class User
 {
-	std::string name;
-};
+	bool hasSecret;
+	std::string hostname;
+	std::string nickname;
+	std::string realname;
+	std::string servername;
+	std::string username;
 
-class Message
-{
 	friend class Server;
-	std::string prefix;
-	std::string command;
-	std::vector<std::string> params;
-	Message(const std::string &msg)
+	User();
+	bool isRegistered() const
 	{
-		std::vector<std::string> splited_msg;
-		// split mgs
-		char *tmp =  strtok(msg, " ");
-		while(tmp != NULL)
-		{
-			tmp = strtok(NULL, "");
-			splited_msg.push_back(tmp);
-		}
-		if (splited_msg[0][0] == '!'){
-			prefix = splited_msg[0];
-			command = splited_msg[1];
-			params.assign(splited_msg.begin() + 2, splited_msg.end());
-		}
-		else
-		{
-			command = splited_msg[0];
-			params.assign(splited_msg.begin() + 2, splited_msg.end());
-		}
+		return !nickname.empty() && !username.empty();
+	};
+	static bool validNick(const std::string &nick)
+	{
+		return nick.empty(), true;
 	}
 };
 
 class Server
 {
-	typedef struct pollfd pollfd;
-	typedef struct sockaddr sockaddr;
-	typedef struct sockaddr_in sockaddr_in;
-	typedef struct sockaddr_storage sockaddr_storage;
-
-	int sockfd;
-	sockaddr_in addr;
-	sockaddr_storage oth_addr;
-	std::map<int, std::string> bufs;
-	std::set<User> users;
-	std::string pass;
+	const int tcpsock;
+	const std::string password;
+	sockaddr_in serv;
+	std::map<const int, std::string> bufs;
+	std::map<const int, User> users;
 	std::vector<pollfd> cons;
 
-	void execute_message(const Message &msg){std::cout << msg.command << std::endl;}
-	void read_sock(std::vector<pollfd>::const_iterator &con);
-	void register_sock();
+	~Server();
+	const Message nick(User &usr, const std::vector<std::string> &prms);
+	const Message pass(User &usr, const std::vector<std::string> &prms);
+	const Message user(User &usr, const std::vector<std::string> &prms);
+	Server(const int port, const std::string &name);
+	void process(const int sockfd, const Message &msg);
+	void receive(std::vector<pollfd>::const_iterator &con);
+	bool nickIsUsed(const std::string &nick) const;
 
   public:
-	~Server();
-	Server(const int port, const std::string &name);
-	void event_loop();
+	static Server &getInstance(const int port, const std::string &pass);
+	void eventloop();
+};
+
+class SystemException : public std::system_error
+{
+  public:
+	SystemException(const char *err)
+		: system_error(std::error_code(errno, std::system_category()), err)
+	{
+	}
 };
 
 #endif
