@@ -12,6 +12,7 @@
 class User
 {
 	bool hasSecret;
+	const int fd;
 	std::string hostname;
 	std::string nickname;
 	std::string realname;
@@ -19,7 +20,8 @@ class User
 	std::string username;
 
 	friend class Server;
-	User();
+	friend struct Message;
+	User(const int fd);
 	bool isRegistered() const
 	{
 		return !nickname.empty() && !username.empty();
@@ -40,13 +42,16 @@ class Server
 	std::vector<pollfd> cons;
 
 	~Server();
-	const Message nick(User &usr, const std::vector<std::string> &prms);
-	const Message pass(User &usr, const std::vector<std::string> &prms);
-	const Message user(User &usr, const std::vector<std::string> &prms);
-	Server(const int port, const std::string &name);
-	void process(const int sockfd, const Message &msg);
-	void receive(std::vector<pollfd>::const_iterator &con);
 	bool nickIsUsed(const std::string &nick) const;
+	const Message nick(User &usr, const Message &req);
+	const Message notice(User &usr, const Message &req);
+	const Message pass(User &usr, const Message &req);
+	const Message privmsg(User &usr, const Message &req);
+	const Message user(User &usr, const Message &req);
+	Server(const int port, const std::string &name);
+	User *lookUpUser(const std::string &nick);
+	void process(User &usr, const Message &req);
+	void receive(std::vector<pollfd>::const_iterator &con);
 
   public:
 	static Server &getInstance(const int port, const std::string &pass);
@@ -62,4 +67,6 @@ class SystemException : public std::system_error
 	}
 };
 
+#define BlockingError(func) \
+	(std::cerr << func << ": " << strerror(EWOULDBLOCK) << std::endl)
 #endif

@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <vector>
 
+class User;
 struct Message
 {
 	std::string command;
@@ -24,6 +25,7 @@ struct Message
 	Message();
 	Message(const int fd);
 	Message(std::string &msg);
+	Message &addPrefix(const User& usr);
 };
 
 #endif

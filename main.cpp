@@ -1,6 +1,6 @@
 #include "ircserv.hpp"
 
-User::User() : hasSecret(false)
+User::User(const int fd) : hasSecret(false), fd(fd)
 {
 }
 
@@ -14,6 +14,6 @@ int main(int argc, char *argv[])
 	}
 	catch (const std::exception &exp)
 	{
-		std::cout << exp.what() << std::endl;
+		std::cerr << exp.what() << std::endl;
 	}
 }

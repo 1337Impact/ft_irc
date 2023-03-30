@@ -1,6 +1,7 @@
 #include "message.hpp"
 #include <sstream>
 #include <string>
+#include "ircserv.hpp"
 
 Message::Message(std::string &msg)
 {
@@ -38,6 +39,12 @@ std::string Message::totxt() const
 		txt << ' ' << params[i];
 	txt << "\r\n";
 	return txt.str();
+}
+
+Message &Message::addPrefix(const User& usr)
+{
+	prefix = usr.nickname;
+	return *this;
 }
 
 Message::Message(const int ncmd)

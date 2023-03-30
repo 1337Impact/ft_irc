@@ -2,6 +2,7 @@
 #include "message.hpp"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <sstream>
 
 bool Server::nickIsUsed(const std::string &nick) const
@@ -14,26 +15,40 @@ bool Server::nickIsUsed(const std::string &nick) const
 	return false;
 }
 
+User *Server::lookUpUser(const std::string &nick)
+{
+	for (std::map<const int, User>::iterator usr = users.begin();
+		 usr != users.end();
+		 usr++)
+		if (nick == usr->second.nickname)
+			return &usr->second;
+	return (nullptr);
+}
+
 Server &Server::getInstance(const int port, const std::string &pass)
 {
 	static Server instance(port, pass);
 	return instance;
 }
 
-void Server::process(const int sockfd, const Message &req)
+void Server::process(User &usr, const Message &req)
 {
 	std::string res;
 	if (req.command == "PASS")
-		res = pass(users.at(sockfd), req.params).totxt();
+		res = pass(usr, req).totxt();
 	else if (req.command == "USER")
-		res = user(users.at(sockfd), req.params).totxt();
+		res = user(usr, req).totxt();
 	else if (req.command == "NICK")
-		res = nick(users.at(sockfd), req.params).totxt();
+		res = nick(usr, req).totxt();
+	else if (req.command == "PRIVMSG")
+		res = privmsg(usr, req).totxt();
+	else if (req.command == "NOTICE")
+		res = notice(usr, req).totxt();
 	else
 		res =
 			Message(421).addParam(req.command).addParam(":Unknown command").totxt();
-	if (!res.empty())
-		send(sockfd, res.data(), res.size(), 0);
+	if (!res.empty() && send(usr.fd, res.data(), res.size(), 0) == -1)
+		BlockingError("send");
 }
 
 Server::~Server()
@@ -42,7 +57,7 @@ Server::~Server()
 		 con != cons.cend();
 		 con++)
 		if (close(con->fd) == -1)
-			perror("close");
+			BlockingError("close");
 }
 
 Server::Server(const int port, const std::string &pass)
@@ -70,19 +85,29 @@ void Server::receive(std::vector<pollfd>::const_iterator &con)
 	if (nbytes <= 0)
 	{
 		if (nbytes == -1)
-			perror("recv");
+			BlockingError("recv");
 		if (close(con->fd) == -1)
-			perror("close");
+			BlockingError("close");
 		cons.erase(con, con + 1);
 		bufs.erase(con->fd);
 	}
 	else
 	{
 		bufs[con->fd].append(buf);
-		if (nbytes > 1 && !bufs[con->fd].compare(nbytes - 2, 2, "\r\n"))
+		if (nbytes > 1)
 		{
-			process(con->fd, Message(bufs[con->fd]));
-			bufs.erase(con->fd);
+			if (!bufs[con->fd].compare(nbytes - 2, 2, "\r\n"))
+			{
+				User &usr = users.at(con->fd);
+				process(usr, Message(bufs[con->fd]).addPrefix(usr));
+				bufs.erase(con->fd);
+			}
+			else if (nbytes == 512)
+			{
+				// segfault on this one
+				std::cerr << "Message is too large" << std::endl;
+				bufs.erase(con->fd);
+			}
 		}
 	}
 }
@@ -100,12 +125,12 @@ void Server::eventloop()
 		if (cons.front().revents & POLLIN)
 		{
 			con.fd = accept(tcpsock, (sockaddr *)&cdata, &size);
-			if (con.fd == -1)
-				perror("accept");
+			if (con.fd < 0)
+				BlockingError("accept");
 			else
 			{
 				cons.push_back(con);
-				users.insert(std::pair<const int, User>(con.fd, User()));
+				users.insert(std::pair<const int, User>(con.fd, User(con.fd)));
 				std::cout << "new accepted connection" << std::endl;
 			}
 			evts--;
