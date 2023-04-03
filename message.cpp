@@ -1,29 +1,46 @@
 #include "message.hpp"
 #include <sstream>
 #include <string>
+#include <sys/_types/_size_t.h>
+#include <vector>
+#include <cctype>
 #include "ircserv.hpp"
 
+
+// parse request
 Message::Message(std::string &msg)
 {
-	std::vector<std::string> splited_msg;
-	// split mgs
-	std::stringstream ss(msg);
-	std::string word;
-	while (ss >> word)
+	msg.erase(msg.end() - 2, msg.end());
+	size_t i = 0;
+
+	//handling prefix
+	for (; msg[i] == ' ' && i < msg.size(); i++); //temporary
+	if (msg[i] == ':')
+		for (; msg[i] != ' ' && i < msg.size(); i++);
+	for (; msg[i] == ' ' && i < msg.size(); i++);
+	//command
+	for (; msg[i] != ' ' && i < msg.size(); i++)
 	{
-		splited_msg.push_back(word);
-		// std::cout << word << std::endl;
+		if (!isalpha(msg[i]))
+			throw "command parsing error"; // waiting for handle
+		command += msg[i];
 	}
-	if (splited_msg[0][0] == '!')
+	// handle params
+	while (i < msg.size())
 	{
-		prefix = splited_msg[0];
-		command = splited_msg[1];
-		params.assign(splited_msg.begin() + 2, splited_msg.end());
-	}
-	else
-	{
-		command = splited_msg[0];
-		params.assign(splited_msg.begin() + 1, splited_msg.end());
+		for (; msg[i] == ' ' && i < msg.size(); i++);
+		if (msg[i] == ':')
+		{
+			std::string trailing(msg.begin() + i, msg.end());
+			params.push_back(trailing);
+			break;
+		}
+		else{
+			std::string param;
+			for (; msg[i] != ' ' && i < msg.size(); i++)
+				param += msg[i];
+			params.push_back(param);
+		}
 	}
 }
 
@@ -63,13 +80,3 @@ Message &Message::addParam(const std::string &prm)
 Message::Message()
 {
 }
-
-// int main()
-// {
-//     std::string par("cmd param1 param2");
-//     Message msg(par);
-
-//     std::cout << msg.command << std::endl;
-//     std::cout << msg.params[0] << std::endl;
-//     std::cout << msg.params[1] << std::endl;
-// }

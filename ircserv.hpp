@@ -5,6 +5,7 @@
 #include <exception>
 #include <map>
 #include <netinet/in.h>
+#include <set>
 #include <string>
 #include <sys/poll.h>
 #include <vector>
@@ -21,6 +22,7 @@ class User
 
 	friend class Server;
 	friend struct Message;
+	friend class Channel;
 	User(const int fd);
 	bool isRegistered() const
 	{
@@ -28,8 +30,33 @@ class User
 	};
 	static bool validNick(const std::string &nick)
 	{
-		return nick.empty(), true;
+		if (!isalpha(nick[0]))
+			return false;
+		for (size_t i = 1; i < nick.size(); i++)
+			if (!isalnum(nick[i]) && nick[i] != '-' && nick[i] != '|' &&
+				nick[i] != '[' && nick[i] != ']' && nick[i] != '\\' &&
+				nick[i] != '`' && nick[i] != '^' && nick[i] != '{' &&
+				nick[i] != '}')
+				return false;
+		return true;
 	}
+};
+
+class Channel
+{
+	const  std::string name;
+	std::set<User *> members;
+	public:
+	Channel(const std::string &name);
+	void join(User *user){
+		members.insert(user);
+	}
+	void broadcast(const std::string &res){
+		std::set<User *>::iterator it;
+		for (it = members.begin(); it != members.end(); it++)
+			send((*it)->fd, res.data(), res.size(), 0);
+	}
+
 };
 
 class Server

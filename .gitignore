@@ -30,8 +30,5 @@
 *.exe
 *.out
 *.app
-
-# project stuff
-ircserv
-.clangd
 .clang-format
+ircserv
