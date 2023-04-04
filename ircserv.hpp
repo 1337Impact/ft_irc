@@ -2,7 +2,9 @@
 #define IRCSERV_HPP
 
 #include "message.hpp"
+#include <algorithm>
 #include <exception>
+#include <list>
 #include <map>
 #include <netinet/in.h>
 #include <set>
@@ -14,6 +16,7 @@ class User
 {
 	bool hasSecret;
 	const int fd;
+	bool is_oper;
 	std::string hostname;
 	std::string nickname;
 	std::string realname;
@@ -44,19 +47,26 @@ class User
 
 class Channel
 {
-	const  std::string name;
+	const std::string name;
+	bool is_invite_only;
 	std::set<User *> members;
-	public:
-	Channel(const std::string &name);
-	void join(User *user){
-		members.insert(user);
+
+  public:
+	Channel(const std::string &name, User *usr) : name(name)
+	{
+		members.insert(usr);
 	}
-	void broadcast(const std::string &res){
+	int join(User *usr)
+	{
+		members.insert(usr);
+		return (0);
+	}
+	void broadcast(const std::string &res)
+	{
 		std::set<User *>::iterator it;
 		for (it = members.begin(); it != members.end(); it++)
 			send((*it)->fd, res.data(), res.size(), 0);
 	}
-
 };
 
 class Server
@@ -64,6 +74,7 @@ class Server
 	const int tcpsock;
 	const std::string password;
 	sockaddr_in serv;
+	std::list<Channel> channels;
 	std::map<const int, std::string> bufs;
 	std::map<const int, User> users;
 	std::vector<pollfd> cons;
@@ -75,6 +86,7 @@ class Server
 	const Message pass(User &usr, const Message &req);
 	const Message privmsg(User &usr, const Message &req);
 	const Message user(User &usr, const Message &req);
+	const Message join(User &usr, const Message &req);
 	Server(const int port, const std::string &name);
 	User *lookUpUser(const std::string &nick);
 	void process(User &usr, const Message &req);

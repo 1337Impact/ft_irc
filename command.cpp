@@ -1,5 +1,6 @@
 #include "ircserv.hpp"
 #include "message.hpp"
+#include <algorithm>
 
 const Message Server::pass(User &usr, const Message &req)
 {
@@ -84,6 +85,36 @@ const Message Server::privmsg(User &usr, const Message &req)
 				BlockingError("send");
 	}
 	return Message();
+}
+
+const Message Server::join(User &usr, const Message &req)
+{
+	if (!usr.hasSecret)
+		return Message(464).addParam(":Password incorrect");
+	if (!usr.isRegistered())
+		return Message(451).addParam(":You have not registered");
+	if (req.params.size() < 1)
+		return Message(461).addParam("JOIN").addParam(":Not enough parameters"); //ERR_NEEDMOREPARAMS
+	std::list<Channel>::iterator channelIterator =
+		std::find(channels.begin(), channels.end(), req.params[0]);
+	if (channelIterator == channels.end())
+	{
+		// check if user has access to create channel
+		if (usr.is_oper)
+		{
+			Channel newChannel(req.params[0], &usr);
+
+			this->channels.push_back(newChannel);
+		}
+		else
+			return Message(403).addParam(req.params[0]).addParam(":No such channel"); //ERR_NOSUCHCHANNEL
+	}
+	else
+	{
+		int status = channelIterator->join(&usr);
+		if (!status)
+			return ;//create reply 
+	}
 }
 
 const Message Server::notice(User &usr, const Message &req)
