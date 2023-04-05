@@ -59,12 +59,22 @@ class User
 class Channel
 {
 	friend class Server;
-	const  std::string name;
-	bool is_invite_only;
+	const std::string name;
+	int limit;
+	std::string key;
 	std::set<User *> members;
+	bool privateMode;
+	bool secretMode;
+	bool inviteOnlyMode;
+	bool protectedTopicMode;
+	bool externalMessagesMode;
+	bool moderatedMode;
 
   public:
-	Channel(const std::string &name, User *usr) : name(name)
+	Channel(const std::string &name, User *usr)
+		: name(name), limit(100), privateMode(false), secretMode(false),
+		  inviteOnlyMode(false), protectedTopicMode(false),
+		  externalMessagesMode(false), moderatedMode(false)
 	{
 		members.insert(usr);
 	}
@@ -80,7 +90,16 @@ class Channel
 			Send((*it)->fd, res.data(), res.size());
 	}
 
-	void disjoint(User *user)
+	User *lookUpUser(const std::string &nick)
+	{
+		for (std::set<User *>::iterator usr = members.begin();
+			 usr != members.end();
+			 usr++)
+			if (nick == (*usr)->nickname)
+				return *usr;
+		return (nullptr);
+	}
+	void disjoin(User *user)
 	{
 		members.erase(std::find(members.cbegin(), members.cend(), user));
 	}
@@ -88,6 +107,49 @@ class Channel
 	{
 		return members.cend() ==
 			std::find(members.cbegin(), members.cend(), user);
+	}
+	std::string getChannelModes() const
+	{
+		std::string modes;
+		return modes;
+	}
+	bool isOperator(const User &usr) const
+	{
+		for (std::set<User *>::const_iterator mem = members.cbegin();
+			 mem != members.cend();
+			 mem++)
+			if (usr.username == (*mem)->username)
+				return true;
+		// this commit do not have ChannelModes struct yet
+		return false;
+	}
+	const Message addOperator(const std::string &target, const bool give)
+	{
+		User *usr = lookUpUser(target);
+		if (!usr)
+			return Message(441).addParam(target).addParam(name).addParam(":They aren't on that channel");
+		(void)give;
+		return Message();
+	}
+	const Message setClientLimit(const std::string &limit)
+	{
+		(void)limit;
+		return Message();
+	}
+	const Message setBanMask(const std::string &mask)
+	{
+		(void)mask;
+		return Message();
+	}
+	const Message setSpeaker(const std::string &user)
+	{
+		(void)user;
+		return Message();
+	}
+	const Message setKey(const std::string &key)
+	{
+		(void)key;
+		return Message();
 	}
 };
 
@@ -102,12 +164,16 @@ class Server
 
 	~Server();
 	bool nickIsUsed(const std::string &nick) const;
+	const Message invite(User &usr, const Message &req);
+	const Message kick(User &usr, const Message &req);
+	const Message mode(User &usr, const Message &req);
 	const Message nick(User &usr, const Message &req);
 	const Message notice(User &usr, const Message &req);
 	const Message part(User &usr, const Message &req);
 	const Message pass(User &usr, const Message &req);
 	const Message privmsg(User &usr, const Message &req);
 	const Message quit(User &usr, const Message &req);
+	const Message topic(User &usr, const Message &req);
 	const Message user(User &usr, const Message &req);
 	Channel *lookUpChannel(const std::string &chn);
 	const Message join(User &usr, const Message &req);

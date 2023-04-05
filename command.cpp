@@ -2,6 +2,58 @@
 #include "message.hpp"
 #include <unistd.h>
 
+const Message Server::mode(User &usr, const Message &req)
+{
+	Channel *chn = lookUpChannel(req.params[0]);
+	if (!chn)
+		return Message(403).addParam(req.params[0]).addParam(":No such channel");
+	if (!chn->isOperator(usr))
+		return Message(482).addParam(chn->name).addParam(
+			":You're not channel operator");
+	if (req.params.empty())
+		return Message(324).addParam(chn->name).addParam(chn->getChannelModes());
+	if (req.params[0].size() <= 2 &&
+		(req.params[0][0] == '+' || req.params[0][0] == '-'))
+	{
+		switch (req.params[0][1])
+		{
+		case 'p':
+			return chn->privateMode = req.params[0][0] == '+', Message();
+		case 's':
+			return chn->secretMode = req.params[0][0] == '+', Message();
+		case 'i':
+			return chn->inviteOnlyMode = req.params[0][0] == '+', Message();
+		case 't':
+			return chn->protectedTopicMode = req.params[0][0] == '+', Message();
+		case 'n':
+			return chn->externalMessagesMode = req.params[0][0] == '+', Message();
+		case 'm':
+			return chn->moderatedMode = req.params[0][0] == '+', Message();
+		case 'o':
+			return req.params.size() == 1
+				? Message(461).addParam("MODE").addParam(":Not enough parameters")
+				: chn->addOperator(req.params[1], req.params[0][0] == '+');
+		case 'l':
+			return req.params.size() == 1
+				? Message(461).addParam("MODE").addParam(":Not enough parameters")
+				: chn->setClientLimit(req.params[1]);
+		case 'b':
+			return req.params.size() == 1
+				? Message(461).addParam("MODE").addParam(":Not enough parameters")
+				: chn->setBanMask(req.params[1]);
+		case 'v':
+			return req.params.size() == 1
+				? Message(461).addParam("MODE").addParam(":Not enough parameters")
+				: chn->setSpeaker(req.params[1]);
+		case 'k':
+			return req.params.size() == 1
+				? Message(461).addParam("MODE").addParam(":Not enough parameters")
+				: chn->setKey(req.params[1]);
+		}
+	}
+	return Message(501).addParam(":Unknown MODE flag");
+}
+
 const Message Server::part(User &usr, const Message &req)
 {
 	if (!usr.hasSecret)
@@ -13,7 +65,7 @@ const Message Server::part(User &usr, const Message &req)
 		if (Channel *channel = lookUpChannel(req.params[chn]))
 		{
 			if (channel->isMember(&usr))
-				channel->disjoint(&usr);
+				channel->disjoin(&usr);
 			else
 			{
 				const std::string txt =

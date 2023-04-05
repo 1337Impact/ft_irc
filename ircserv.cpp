@@ -3,8 +3,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <sstream>
 #include <fcntl.h>
+#include <sstream>
 #include <unistd.h>
 
 Channel *Server::lookUpChannel(const std::string &name)
@@ -46,11 +46,16 @@ Server &Server::getInstance(const int port, const std::string &pass)
 void Server::process(User &usr, const Message &req)
 {
 	const std::string res = req.command == "PASS" ? pass(usr, req).totxt()
-		: req.command == "USER"                   ? user(usr, req).totxt()
+		// : req.command == "INVITE"                 ? invite(usr, req).totxt()
+		// : req.command == "JOIN"                   ? join(usr, req).totxt()
+		// : req.command == "KICK"                   ? kick(usr, req).totxt()
+		: req.command == "MODE"                   ? mode(usr, req).totxt()
 		: req.command == "NICK"                   ? nick(usr, req).totxt()
-		: req.command == "PRIVMSG"                ? privmsg(usr, req).totxt()
 		: req.command == "NOTICE"                 ? notice(usr, req).totxt()
 		: req.command == "PART"                   ? part(usr, req).totxt()
+		: req.command == "PRIVMSG"                ? privmsg(usr, req).totxt()
+		// : req.command == "TOPIC"                  ? topic(usr, req).totxt()
+		: req.command == "USER"                   ? user(usr, req).totxt()
 								: ERR_UNKNOWNCOMMAND(req.command).totxt();
 	if (!res.empty())
 		Send(usr.fd, res.data(), res.size());
