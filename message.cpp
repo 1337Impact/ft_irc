@@ -6,6 +6,11 @@
 #include <cctype>
 #include "ircserv.hpp"
 
+Message &Message::setCommand(const std::string &cmd)
+{
+	command = cmd;
+	return *this;
+}
 
 // parse request
 Message::Message(std::string &msg)
@@ -58,7 +63,7 @@ std::string Message::totxt() const
 	return txt.str();
 }
 
-Message &Message::addPrefix(const User& usr)
+Message &Message::setPrefix(const User& usr)
 {
 	prefix = usr.nickname;
 	return *this;
@@ -67,6 +72,8 @@ Message &Message::addPrefix(const User& usr)
 Message::Message(const int ncmd)
 {
 	std::stringstream cmd;
+	cmd.width(3);
+	cmd.fill('0');
 	cmd << ncmd;
 	command = cmd.str();
 }

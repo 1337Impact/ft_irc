@@ -4,6 +4,18 @@
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#include <fcntl.h>
+#include <unistd.h>
+
+Channel *Server::lookUpChannel(const std::string &name)
+{
+	for (std::list<Channel>::iterator chn = channels.begin();
+		 chn != channels.end();
+		 chn++)
+		if (name == chn->name)
+			return &*chn;
+	return (nullptr);
+}
 
 bool Server::nickIsUsed(const std::string &nick) const
 {
@@ -33,22 +45,15 @@ Server &Server::getInstance(const int port, const std::string &pass)
 
 void Server::process(User &usr, const Message &req)
 {
-	std::string res;
-	if (req.command == "PASS")
-		res = pass(usr, req).totxt();
-	else if (req.command == "USER")
-		res = user(usr, req).totxt();
-	else if (req.command == "NICK")
-		res = nick(usr, req).totxt();
-	else if (req.command == "PRIVMSG")
-		res = privmsg(usr, req).totxt();
-	else if (req.command == "NOTICE")
-		res = notice(usr, req).totxt();
-	else
-		res =
-			Message(421).addParam(req.command).addParam(":Unknown command").totxt();
-	if (!res.empty() && send(usr.fd, res.data(), res.size(), 0) == -1)
-		BlockingError("send");
+	const std::string res = req.command == "PASS" ? pass(usr, req).totxt()
+		: req.command == "USER"                   ? user(usr, req).totxt()
+		: req.command == "NICK"                   ? nick(usr, req).totxt()
+		: req.command == "PRIVMSG"                ? privmsg(usr, req).totxt()
+		: req.command == "NOTICE"                 ? notice(usr, req).totxt()
+		: req.command == "PART"                   ? part(usr, req).totxt()
+								: ERR_UNKNOWNCOMMAND(req.command).totxt();
+	if (!res.empty())
+		Send(usr.fd, res.data(), res.size());
 }
 
 Server::~Server()
@@ -56,8 +61,7 @@ Server::~Server()
 	for (std::vector<pollfd>::const_iterator con = cons.cbegin();
 		 con != cons.cend();
 		 con++)
-		if (close(con->fd) == -1)
-			BlockingError("close");
+		Close(con->fd);
 }
 
 Server::Server(const int port, const std::string &pass)
@@ -82,33 +86,32 @@ void Server::receive(std::vector<pollfd>::const_iterator &con)
 {
 	char buf[512] = "";
 	int nbytes = recv(con->fd, buf, sizeof(buf), MSG_DONTWAIT);
+	User &usr = users.at(con->fd);
 	if (nbytes <= 0)
 	{
 		if (nbytes == -1)
 			BlockingError("recv");
-		if (close(con->fd) == -1)
-			BlockingError("close");
-		cons.erase(con, con + 1);
-		bufs.erase(con->fd);
+		quit(usr, QUIT(usr));
+		cons.erase(con);
 	}
-	else
+	else if (usr.buf.append(buf).size() >= 512)
 	{
-		bufs[con->fd].append(buf);
-		if (nbytes > 1)
+		std::cerr << "Message is too large" << std::endl;
+		usr.buf.clear();
+	}
+	else if (!usr.buf.compare(nbytes - 2, 2, "\r\n"))
+	{
+		try
 		{
-			if (!bufs[con->fd].compare(nbytes - 2, 2, "\r\n"))
-			{
-				User &usr = users.at(con->fd);
-				process(usr, Message(bufs[con->fd]).addPrefix(usr));
-				bufs.erase(con->fd);
-			}
-			else if (nbytes == 512)
-			{
-				// segfault on this one
-				std::cerr << "Message is too large" << std::endl;
-				bufs.erase(con->fd);
-			}
+			const Message req = Message(usr.buf).setPrefix(usr);
+			req.command == "QUIT" ? (quit(usr, req), (void)cons.erase(con))
+								  : process(usr, req);
 		}
+		catch (const char *err)
+		{
+			std::cerr << err << std::endl;
+		}
+		usr.buf.clear();
 	}
 }
 

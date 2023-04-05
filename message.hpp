@@ -12,6 +12,13 @@
 #include <unistd.h>
 #include <vector>
 
+#define ERR_UNKNOWNCOMMAND(cmd) \
+	Message(421).addParam(cmd).addParam(":Unknown command")
+
+#define QUIT(usr)                                         \
+	Message().setPrefix(usr).setCommand("QUIT").addParam( \
+		":User quit unexpectedly")
+
 class User;
 struct Message
 {
@@ -22,10 +29,11 @@ struct Message
 
 	friend class Server;
 	Message &addParam(const std::string &prm);
+	Message &setCommand(const std::string &cmd);
 	Message();
 	Message(const int fd);
 	Message(std::string &msg);
-	Message &addPrefix(const User& usr);
+	Message &setPrefix(const User &usr);
 };
 
 #endif

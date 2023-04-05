@@ -1,8 +1,19 @@
 #ifndef IRCSERV_HPP
 #define IRCSERV_HPP
 
+#include <iostream>
+#define BlockingError(func) \
+	std::cerr << func << ": " << strerror(EWOULDBLOCK) << std::endl
+#define Send(a, b, c)           \
+	if (send(a, b, c, 0) == -1) \
+	BlockingError("send")
+#define Close(sockfd)        \
+	if (close(sockfd) == -1) \
+	BlockingError("close")
+
 #include "message.hpp"
 #include <exception>
+#include <list>
 #include <map>
 #include <netinet/in.h>
 #include <set>
@@ -14,6 +25,7 @@ class User
 {
 	bool hasSecret;
 	const int fd;
+	std::string buf;
 	std::string hostname;
 	std::string nickname;
 	std::string realname;
@@ -44,6 +56,7 @@ class User
 
 class Channel
 {
+	friend class Server;
 	const  std::string name;
 	std::set<User *> members;
 	public:
@@ -54,9 +67,18 @@ class Channel
 	void broadcast(const std::string &res){
 		std::set<User *>::iterator it;
 		for (it = members.begin(); it != members.end(); it++)
-			send((*it)->fd, res.data(), res.size(), 0);
+			Send((*it)->fd, res.data(), res.size());
 	}
 
+	void disjoint(User *user)
+	{
+		members.erase(std::find(members.cbegin(), members.cend(), user));
+	}
+	bool isMember(User *user)
+	{
+		return members.cend() ==
+			std::find(members.cbegin(), members.cend(), user);
+	}
 };
 
 class Server
@@ -64,7 +86,7 @@ class Server
 	const int tcpsock;
 	const std::string password;
 	sockaddr_in serv;
-	std::map<const int, std::string> bufs;
+	std::list<Channel> channels;
 	std::map<const int, User> users;
 	std::vector<pollfd> cons;
 
@@ -72,9 +94,12 @@ class Server
 	bool nickIsUsed(const std::string &nick) const;
 	const Message nick(User &usr, const Message &req);
 	const Message notice(User &usr, const Message &req);
+	const Message part(User &usr, const Message &req);
 	const Message pass(User &usr, const Message &req);
 	const Message privmsg(User &usr, const Message &req);
+	const Message quit(User &usr, const Message &req);
 	const Message user(User &usr, const Message &req);
+	Channel *lookUpChannel(const std::string &chn);
 	Server(const int port, const std::string &name);
 	User *lookUpUser(const std::string &nick);
 	void process(User &usr, const Message &req);
@@ -93,7 +118,4 @@ class SystemException : public std::system_error
 	{
 	}
 };
-
-#define BlockingError(func) \
-	(std::cerr << func << ": " << strerror(EWOULDBLOCK) << std::endl)
 #endif
