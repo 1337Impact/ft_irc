@@ -12,6 +12,7 @@
 	BlockingError("close")
 
 #include "message.hpp"
+#include <algorithm>
 #include <exception>
 #include <list>
 #include <map>
@@ -26,6 +27,7 @@ class User
 	bool hasSecret;
 	const int fd;
 	std::string buf;
+	bool is_oper;
 	std::string hostname;
 	std::string nickname;
 	std::string realname;
@@ -58,13 +60,21 @@ class Channel
 {
 	friend class Server;
 	const  std::string name;
+	bool is_invite_only;
 	std::set<User *> members;
-	public:
-	Channel(const std::string &name);
-	void join(User *user){
-		members.insert(user);
+
+  public:
+	Channel(const std::string &name, User *usr) : name(name)
+	{
+		members.insert(usr);
 	}
-	void broadcast(const std::string &res){
+	int join(User *usr)
+	{
+		members.insert(usr);
+		return (0);
+	}
+	void broadcast(const std::string &res)
+	{
 		std::set<User *>::iterator it;
 		for (it = members.begin(); it != members.end(); it++)
 			Send((*it)->fd, res.data(), res.size());
@@ -100,6 +110,7 @@ class Server
 	const Message quit(User &usr, const Message &req);
 	const Message user(User &usr, const Message &req);
 	Channel *lookUpChannel(const std::string &chn);
+	const Message join(User &usr, const Message &req);
 	Server(const int port, const std::string &name);
 	User *lookUpUser(const std::string &nick);
 	void process(User &usr, const Message &req);
