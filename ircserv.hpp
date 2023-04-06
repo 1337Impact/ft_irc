@@ -86,7 +86,7 @@ class Channel
 	int join(User *usr);
 	std::string getChannelModes() const;
 	User *lookUpUser(const std::string &nick);
-	void broadcast(const std::string &res);
+	void broadcast(const std::string &res, const User &skip) const;
 	void disjoin(User *user);
 };
 

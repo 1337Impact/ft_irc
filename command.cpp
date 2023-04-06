@@ -1,4 +1,5 @@
 #include "ircserv.hpp"
+#include <sstream>
 #include <string>
 #include <unistd.h>
 
@@ -34,16 +35,21 @@ const Message Server::names(User &usr, const Message &req)
 		return Message(464).addParam(":Password incorrect");
 	if (!usr.isRegistered())
 		return Message(451).addParam(":You have not registered");
-	Channel *chn = lookUpChannel(req.params[0]);
-	if (!chn)
-		return Message(403).addParam(req.params[0]).addParam(":No such channel");
-	if (chn->secret && !chn->isMember(&usr))
-		return Message();
-	return Message(353)
-		.addParam(chn->priv         ? "*"
-					  : chn->secret ? "@"
-									: "=")
-		.addParam(":Me");
+	std::istringstream chnls(req.params[0]);
+	std::string name;
+	while (getline(chnls, name, ','))
+	{
+		Channel *chn = lookUpChannel(name);
+		if (!chn)
+			return Message(403).addParam(name).addParam(":No such channel");
+		if (chn->secret && !chn->isMember(&usr))
+			return Message();
+		return Message(353)
+			.addParam(chn->priv         ? "*"
+						  : chn->secret ? "@"
+										: "=")
+			.addParam(":Me");
+	}
 	return Message(366).addParam(req.params[0]).addParam(":End of /NAMES list");
 }
 
@@ -56,13 +62,12 @@ const Message Server::list(User &usr, const Message &req)
 	std::string rpl =
 		Message(321).addParam("Channel").addParam(":Users  Name").totxt();
 	Send(usr.fd, rpl.data(), rpl.size());
-	std::set<Channel *> reqs;
-	for (std::list<Channel>::const_iterator chn = channels.cbegin();
-		 chn != channels.cend();
-		 chn++)
-		if ((req.params.empty() ||
-			 reqs.cend() != std::find(reqs.begin(), reqs.cend(), &*chn)) &&
-			((chn->priv || chn->secret) && !chn->isMember(&usr)))
+	std::istringstream chnls(req.params[0]);
+	std::string name;
+	while (getline(chnls, name, ','))
+	{
+		Channel *chn = lookUpChannel(name);
+		if ((chn->priv || chn->secret) && !chn->isMember(&usr))
 		{
 			rpl = Message(322)
 					  .addParam(chn->name)
@@ -71,6 +76,7 @@ const Message Server::list(User &usr, const Message &req)
 					  .totxt();
 			Send(usr.fd, rpl.data(), rpl.size());
 		}
+	}
 	return Message(323).addParam(":End of /LIST");
 }
 
@@ -164,9 +170,11 @@ const Message Server::part(User &usr, const Message &req)
 		return Message(464).addParam(":Password incorrect");
 	if (!usr.isRegistered())
 		return Message(451).addParam(":You have not registered");
-	for (unsigned chn = 0; chn < req.params.size(); chn++)
+	std::istringstream chnls(req.params[0]);
+	std::string name;
+	while (getline(chnls, name, ','))
 	{
-		if (Channel *channel = lookUpChannel(req.params[chn]))
+		if (Channel *channel = lookUpChannel(name))
 		{
 			if (channel->isMember(&usr))
 				channel->disjoin(&usr);
@@ -174,7 +182,7 @@ const Message Server::part(User &usr, const Message &req)
 			{
 				const std::string txt =
 					Message(442)
-						.addParam(req.params[chn])
+						.addParam(name)
 						.addParam(":You're not on that channel")
 						.totxt();
 				Send(usr.fd, txt.data(), txt.size());
@@ -182,10 +190,8 @@ const Message Server::part(User &usr, const Message &req)
 		}
 		else
 		{
-			const std::string txt = Message(403)
-										.addParam(req.params[chn])
-										.addParam(":No such channel")
-										.totxt();
+			const std::string txt =
+				Message(403).addParam(name).addParam(":No such channel").totxt();
 			Send(usr.fd, txt.data(), txt.size());
 		}
 	}
@@ -196,11 +202,11 @@ const Message Server::quit(User &usr, const Message &req)
 {
 	const std::string txt = req.totxt();
 	Close(usr.fd);
-	for (std::map<const int, User>::const_iterator oth = users.cbegin();
-		 oth != users.cend();
-		 oth++)
-		if (usr.fd != oth->first)
-			Send(oth->second.fd, txt.data(), txt.size());
+	for (std::list<Channel>::const_iterator chn = channels.cbegin();
+		 chn != channels.cend();
+		 chn++)
+		if (chn->isMember(&usr))
+			chn->broadcast(txt, usr);
 	users.erase(usr.fd);
 	return Message();
 }
@@ -268,36 +274,34 @@ const Message Server::privmsg(User &usr, const Message &req)
 		return Message(412).addParam(":No text to send");
 	std::list<Channel *> channels;
 	std::vector<User *> users;
-	for (unsigned target = 0; target < req.params.size() - 1; target++)
+	std::istringstream targets(req.params[0]);
+	std::string name;
+	while (getline(targets, name, ','))
 	{
-		if (User *user = lookUpUser(req.params[target]))
+		if (User *user = lookUpUser(name))
 		{
 			for (unsigned rec = 0; rec < users.size(); rec++)
 				if (users[rec]->nickname == user->nickname)
-					return Message(407)
-						.addParam(req.params[target])
-						.addParam(":Duplicate recipients. No message delivered");
+					return Message(407).addParam(name).addParam(
+						":Duplicate recipients. No message delivered");
 			users.push_back(user);
 			const std::string txt = req.totxt();
 			for (unsigned rec = 0; rec < users.size(); rec++)
 				Send(users[rec]->fd, txt.data(), txt.size());
 		}
-		else if (Channel *chn = lookUpChannel(req.params[target]))
+		else if (Channel *chn = lookUpChannel(name))
 		{
 			for (std::list<Channel *>::const_iterator rec = channels.cbegin();
 				 rec != channels.end();
 				 rec++)
 				if ((*rec)->name == chn->name)
-					return Message(407)
-						.addParam(req.params[target])
-						.addParam(":Duplicate recipients. No message delivered");
+					return Message(407).addParam(name).addParam(
+						":Duplicate recipients. No message delivered");
 			channels.push_back(chn);
-			chn->broadcast(req.totxt());
+			chn->broadcast(req.totxt(), usr);
 		}
 		else
-			return Message(401)
-				.addParam(req.params[target])
-				.addParam(":No such nick/channel");
+			return Message(401).addParam(name).addParam(":No such nick/channel");
 	}
 	return Message();
 }

@@ -13,11 +13,13 @@ int Channel::join(User *usr)
 	return (0);
 }
 
-void Channel::broadcast(const std::string &res)
+void Channel::broadcast(const std::string &res, const User &skip) const
 {
-	std::set<User *>::iterator it;
-	for (it = members.begin(); it != members.end(); it++)
-		Send((*it)->fd, res.data(), res.size());
+	for (std::set<User *>::const_iterator it = members.cbegin();
+		 it != members.cend();
+		 it++)
+		if (skip.username != (*it)->username)
+			Send((*it)->fd, res.data(), res.size());
 }
 
 User *Channel::lookUpUser(const std::string &nick)
