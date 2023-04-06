@@ -2,6 +2,13 @@
 #define IRCSERV_HPP
 
 #include <iostream>
+#include <list>
+#include <map>
+#include <netinet/in.h>
+#include <set>
+#include <sys/poll.h>
+#include <vector>
+
 #define BlockingError(func) \
 	std::cerr << func << ": " << strerror(EWOULDBLOCK) << std::endl
 #define Send(a, b, c)           \
@@ -10,17 +17,28 @@
 #define Close(sockfd)        \
 	if (close(sockfd) == -1) \
 	BlockingError("close")
+#define ERR_UNKNOWNCOMMAND(cmd) \
+	Message(421).addParam(cmd).addParam(":Unknown command")
+#define QUIT(usr)                                         \
+	Message().setPrefix(usr).setCommand("QUIT").addParam( \
+		":User quit unexpectedly")
 
-#include "message.hpp"
-#include <algorithm>
-#include <exception>
-#include <list>
-#include <map>
-#include <netinet/in.h>
-#include <set>
-#include <string>
-#include <sys/poll.h>
-#include <vector>
+class User;
+struct Message
+{
+	std::string command;
+	std::string prefix;
+	std::string totxt() const;
+	std::vector<std::string> params;
+
+	friend class Server;
+	Message &addParam(const std::string &prm);
+	Message &setCommand(const std::string &cmd);
+	Message();
+	Message(const int fd);
+	Message(std::string &msg);
+	Message &setPrefix(const User &usr);
+};
 
 class User
 {
@@ -38,22 +56,8 @@ class User
 	friend struct Message;
 	friend class Channel;
 	User(const int fd);
-	bool isRegistered() const
-	{
-		return !nickname.empty() && !username.empty();
-	};
-	static bool validNick(const std::string &nick)
-	{
-		if (!isalpha(nick[0]))
-			return false;
-		for (size_t i = 1; i < nick.size(); i++)
-			if (!isalnum(nick[i]) && nick[i] != '-' && nick[i] != '|' &&
-				nick[i] != '[' && nick[i] != ']' && nick[i] != '\\' &&
-				nick[i] != '`' && nick[i] != '^' && nick[i] != '{' &&
-				nick[i] != '}')
-				return false;
-		return true;
-	}
+	bool isRegistered() const;
+	static bool validNick(const std::string &nick);
 };
 
 class Channel
@@ -62,95 +66,28 @@ class Channel
 	const std::string name;
 	int limit;
 	std::string key;
+	std::string topic;
 	std::set<User *> members;
-	bool privateMode;
-	bool secretMode;
-	bool inviteOnlyMode;
-	bool protectedTopicMode;
-	bool externalMessagesMode;
-	bool moderatedMode;
+	bool priv;
+	bool secret;
+	bool inviteOnly;
+	bool protectedTopic;
+	bool externalMessages;
+	bool moderated;
 
-  public:
-	Channel(const std::string &name, User *usr)
-		: name(name), limit(100), privateMode(false), secretMode(false),
-		  inviteOnlyMode(false), protectedTopicMode(false),
-		  externalMessagesMode(false), moderatedMode(false)
-	{
-		members.insert(usr);
-	}
-	int join(User *usr)
-	{
-		members.insert(usr);
-		return (0);
-	}
-	void broadcast(const std::string &res)
-	{
-		std::set<User *>::iterator it;
-		for (it = members.begin(); it != members.end(); it++)
-			Send((*it)->fd, res.data(), res.size());
-	}
-
-	User *lookUpUser(const std::string &nick)
-	{
-		for (std::set<User *>::iterator usr = members.begin();
-			 usr != members.end();
-			 usr++)
-			if (nick == (*usr)->nickname)
-				return *usr;
-		return (nullptr);
-	}
-	void disjoin(User *user)
-	{
-		members.erase(std::find(members.cbegin(), members.cend(), user));
-	}
-	bool isMember(User *user)
-	{
-		return members.cend() ==
-			std::find(members.cbegin(), members.cend(), user);
-	}
-	std::string getChannelModes() const
-	{
-		std::string modes;
-		return modes;
-	}
-	bool isOperator(const User &usr) const
-	{
-		for (std::set<User *>::const_iterator mem = members.cbegin();
-			 mem != members.cend();
-			 mem++)
-			if (usr.username == (*mem)->username)
-				return true;
-		// this commit do not have ChannelModes struct yet
-		return false;
-	}
-	const Message addOperator(const std::string &target, const bool give)
-	{
-		User *usr = lookUpUser(target);
-		if (!usr)
-			return Message(441).addParam(target).addParam(name).addParam(":They aren't on that channel");
-		(void)give;
-		return Message();
-	}
-	const Message setClientLimit(const std::string &limit)
-	{
-		(void)limit;
-		return Message();
-	}
-	const Message setBanMask(const std::string &mask)
-	{
-		(void)mask;
-		return Message();
-	}
-	const Message setSpeaker(const std::string &user)
-	{
-		(void)user;
-		return Message();
-	}
-	const Message setKey(const std::string &key)
-	{
-		(void)key;
-		return Message();
-	}
+	bool isMember(User *user) const;
+	bool isOperator(const User &usr) const;
+	Channel(const std::string &name, User *usr);
+	const Message addOperator(const std::string &target, const bool give);
+	const Message setBanMask(const std::string &mask);
+	const Message setClientLimit(const std::string &limit);
+	const Message setKey(const std::string &key);
+	const Message setSpeaker(const std::string &user);
+	int join(User *usr);
+	std::string getChannelModes() const;
+	User *lookUpUser(const std::string &nick);
+	void broadcast(const std::string &res);
+	void disjoin(User *user);
 };
 
 class Server
@@ -166,7 +103,9 @@ class Server
 	bool nickIsUsed(const std::string &nick) const;
 	const Message invite(User &usr, const Message &req);
 	const Message kick(User &usr, const Message &req);
+	const Message list(User &usr, const Message &req);
 	const Message mode(User &usr, const Message &req);
+	const Message names(User &usr, const Message &req);
 	const Message nick(User &usr, const Message &req);
 	const Message notice(User &usr, const Message &req);
 	const Message part(User &usr, const Message &req);

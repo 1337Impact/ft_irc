@@ -1,9 +1,113 @@
 #include "ircserv.hpp"
-#include "message.hpp"
+#include <string>
 #include <unistd.h>
+
+const Message Server::kick(User &usr, const Message &req)
+{
+	if (!usr.hasSecret)
+		return Message(464).addParam(":Password incorrect");
+	if (!usr.isRegistered())
+		return Message(451).addParam(":You have not registered");
+	Channel *chn = lookUpChannel(req.params[0]);
+	if (!chn)
+		return Message(403).addParam(req.params[0]).addParam(":No such channel");
+	if (!chn->isMember(&usr))
+		return Message(442)
+			.addParam(req.params[0])
+			.addParam(":You're not on that channel");
+	if (!chn->isOperator(usr))
+		return Message(482)
+			.addParam(req.params[0])
+			.addParam(":You're not channel operator");
+	User *mem = lookUpUser(req.params[0]);
+	if (!chn->isMember(mem))
+		return Message(441)
+			.addParam(req.params[1])
+			.addParam(req.params[0])
+			.addParam(":They aren't on that channel");
+	return Message();
+}
+
+const Message Server::names(User &usr, const Message &req)
+{
+	if (!usr.hasSecret)
+		return Message(464).addParam(":Password incorrect");
+	if (!usr.isRegistered())
+		return Message(451).addParam(":You have not registered");
+	Channel *chn = lookUpChannel(req.params[0]);
+	if (!chn)
+		return Message(403).addParam(req.params[0]).addParam(":No such channel");
+	if (chn->secret && !chn->isMember(&usr))
+		return Message();
+	return Message(353)
+		.addParam(chn->priv         ? "*"
+					  : chn->secret ? "@"
+									: "=")
+		.addParam(":Me");
+	return Message(366).addParam(req.params[0]).addParam(":End of /NAMES list");
+}
+
+const Message Server::list(User &usr, const Message &req)
+{
+	if (!usr.hasSecret)
+		return Message(464).addParam(":Password incorrect");
+	if (!usr.isRegistered())
+		return Message(451).addParam(":You have not registered");
+	std::string rpl =
+		Message(321).addParam("Channel").addParam(":Users  Name").totxt();
+	Send(usr.fd, rpl.data(), rpl.size());
+	std::set<Channel *> reqs;
+	for (std::list<Channel>::const_iterator chn = channels.cbegin();
+		 chn != channels.cend();
+		 chn++)
+		if ((req.params.empty() ||
+			 reqs.cend() != std::find(reqs.begin(), reqs.cend(), &*chn)) &&
+			((chn->priv || chn->secret) && !chn->isMember(&usr)))
+		{
+			rpl = Message(322)
+					  .addParam(chn->name)
+					  .addParam(std::to_string(chn->members.size()))
+					  .addParam(chn->topic)
+					  .totxt();
+			Send(usr.fd, rpl.data(), rpl.size());
+		}
+	return Message(323).addParam(":End of /LIST");
+}
+
+const Message Server::invite(User &usr, const Message &req)
+{
+	if (!usr.hasSecret)
+		return Message(464).addParam(":Password incorrect");
+	if (!usr.isRegistered())
+		return Message(451).addParam(":You have not registered");
+	if (req.params.size() < 2)
+		return Message(461).addParam("INVITE").addParam(":Not enough parameters");
+	Channel *chn = nullptr;
+	if (!chn)
+		return Message(403).addParam(req.params[0]).addParam(":No such channel");
+	if (!chn->isMember(&usr))
+		return Message(442)
+			.addParam(req.params[0])
+			.addParam(":You're not on that channel");
+	if (!chn->isOperator(usr))
+		return Message(482)
+			.addParam(req.params[0])
+			.addParam(":You're not channel operator");
+	User *mem = lookUpUser(req.params[0]);
+	if (!mem)
+		return Message(401).addParam(":No such nick/channel");
+	if (chn->isMember(mem))
+		return Message(443).addParam(req.params[0]).addParam(":is already on channel");
+	chn->join(mem);
+	return Message(341).addParam(req.params[0]).addParam(req.params[1]);
+}
 
 const Message Server::mode(User &usr, const Message &req)
 {
+	if (!usr.hasSecret)
+		return Message(464).addParam(":Password incorrect");
+	if (!usr.isRegistered())
+		return Message(451).addParam(":You have not registered");
 	Channel *chn = lookUpChannel(req.params[0]);
 	if (!chn)
 		return Message(403).addParam(req.params[0]).addParam(":No such channel");
@@ -18,17 +122,17 @@ const Message Server::mode(User &usr, const Message &req)
 		switch (req.params[0][1])
 		{
 		case 'p':
-			return chn->privateMode = req.params[0][0] == '+', Message();
+			return chn->secret ?: chn->priv = req.params[0][0] == '+', Message();
 		case 's':
-			return chn->secretMode = req.params[0][0] == '+', Message();
+			return chn->priv ?: chn->secret = req.params[0][0] == '+', Message();
 		case 'i':
-			return chn->inviteOnlyMode = req.params[0][0] == '+', Message();
+			return chn->inviteOnly = req.params[0][0] == '+', Message();
 		case 't':
-			return chn->protectedTopicMode = req.params[0][0] == '+', Message();
+			return chn->protectedTopic = req.params[0][0] == '+', Message();
 		case 'n':
-			return chn->externalMessagesMode = req.params[0][0] == '+', Message();
+			return chn->externalMessages = req.params[0][0] == '+', Message();
 		case 'm':
-			return chn->moderatedMode = req.params[0][0] == '+', Message();
+			return chn->moderated = req.params[0][0] == '+', Message();
 		case 'o':
 			return req.params.size() == 1
 				? Message(461).addParam("MODE").addParam(":Not enough parameters")
@@ -100,16 +204,13 @@ const Message Server::quit(User &usr, const Message &req)
 	users.erase(usr.fd);
 	return Message();
 }
-#include <algorithm>
 
 const Message Server::pass(User &usr, const Message &req)
 {
 	if (usr.hasSecret)
 		return Message();
 	if (req.params.empty())
-	{
 		return Message(461).addParam("PASS").addParam(":Not enough parameters");
-	}
 	if (usr.isRegistered())
 		return Message(462).addParam(":You may not reregister");
 	if (password != req.params[0])
@@ -208,7 +309,8 @@ const Message Server::join(User &usr, const Message &req)
 	if (!usr.isRegistered())
 		return Message(451).addParam(":You have not registered");
 	if (req.params.size() < 1)
-		return Message(461).addParam("JOIN").addParam(":Not enough parameters"); //ERR_NEEDMOREPARAMS
+		return Message(461).addParam("JOIN").addParam(
+			":Not enough parameters"); // ERR_NEEDMOREPARAMS
 	std::list<Channel>::iterator channelIterator = channels.end();
 	if (channelIterator == channels.end())
 	{
@@ -220,13 +322,15 @@ const Message Server::join(User &usr, const Message &req)
 			this->channels.push_back(newChannel);
 		}
 		else
-			return Message(403).addParam(req.params[0]).addParam(":No such channel"); //ERR_NOSUCHCHANNEL
+			return Message(403)
+				.addParam(req.params[0])
+				.addParam(":No such channel"); // ERR_NOSUCHCHANNEL
 	}
 	else
 	{
 		int status = channelIterator->join(&usr);
 		if (!status)
-			return Message();//create reply 
+			return Message(); // create reply
 	}
 	return Message();
 }

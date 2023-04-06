@@ -1,10 +1,5 @@
-#include "message.hpp"
-#include <sstream>
-#include <string>
-#include <sys/_types/_size_t.h>
-#include <vector>
-#include <cctype>
 #include "ircserv.hpp"
+#include <sstream>
 
 Message &Message::setCommand(const std::string &cmd)
 {
