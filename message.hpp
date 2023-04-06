@@ -23,7 +23,7 @@ struct Message
 	friend class Server;
 	Message &addParam(const std::string &prm);
 	Message();
-	Message(const int fd);
+	Message(const int ncmd);
 	Message(std::string &msg);
 	Message &addPrefix(const User& usr);
 };

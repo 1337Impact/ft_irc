@@ -44,6 +44,8 @@ void Server::process(User &usr, const Message &req)
 		res = privmsg(usr, req).totxt();
 	else if (req.command == "NOTICE")
 		res = notice(usr, req).totxt();
+	else if (req.command == "JOIN")
+		res = join(usr, req).totxt();
 	else
 		res =
 			Message(421).addParam(req.command).addParam(":Unknown command").totxt();
@@ -104,7 +106,6 @@ void Server::receive(std::vector<pollfd>::const_iterator &con)
 			}
 			else if (nbytes == 512)
 			{
-				// segfault on this one
 				std::cerr << "Message is too large" << std::endl;
 				bufs.erase(con->fd);
 			}

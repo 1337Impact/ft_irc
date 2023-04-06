@@ -8,7 +8,9 @@
 #include <map>
 #include <netinet/in.h>
 #include <set>
+#include <sstream>
 #include <string>
+#include <sys/_types/_size_t.h>
 #include <sys/poll.h>
 #include <vector>
 
@@ -48,24 +50,69 @@ class User
 class Channel
 {
 	const std::string name;
+	const std::string key;
 	bool is_invite_only;
-	std::set<User *> members;
+	std::string chTopic;
+	size_t max_members;
+
+	std::list<User *> invited;
+	struct ChannelMember
+	{
+		User &usr;
+		bool is_oper;
+		bool is_banned;
+		ChannelMember(User &usr) : usr(usr), is_oper(false)
+		{
+		}
+	};
+	std::set<ChannelMember> members;
+
+	friend class Server;
 
   public:
-	Channel(const std::string &name, User *usr) : name(name)
+	Channel(const std::string &name, User &usr, std::string key = std::string())
+		: name(name), key(key), max_members(100)
 	{
-		members.insert(usr);
+		ChannelMember newMember(usr);
+		newMember.is_oper = true;
+		members.insert(newMember);
 	}
-	int join(User *usr)
+
+	int join(User &usr, std::string _key)
 	{
-		members.insert(usr);
-		return (0);
+		if (is_invite_only &&
+			std::find(invited.begin(), invited.end(), &usr) == invited.end())
+			return (1);
+		if (!key.empty() && key != _key) //still need to no if key is ignored when it is not set in channel
+			  return (2);
+		if (members.size() == max_members)
+			return (3);
+		else
+		{
+			members.insert(ChannelMember(usr));
+			return (0);
+		}
 	}
+
 	void broadcast(const std::string &res)
 	{
-		std::set<User *>::iterator it;
+		std::set<ChannelMember>::iterator it;
 		for (it = members.begin(); it != members.end(); it++)
-			send((*it)->fd, res.data(), res.size(), 0);
+			send(it->usr.fd, res.data(), res.size(), 0);
+	}
+
+	std::string get_memebers(void)
+	{
+		std::string membersList;
+		std::set<ChannelMember>::iterator it;
+		for (it = members.begin(); it != members.end(); it++)
+		{
+			if (it->is_oper)
+				membersList += '@';
+			membersList += it->usr.nickname;
+			membersList += ' ';
+		}
+		return (membersList);
 	}
 };
 
