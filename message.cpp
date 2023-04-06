@@ -1,11 +1,11 @@
-#include "message.hpp"
-#include <sstream>
-#include <string>
-#include <sys/_types/_size_t.h>
-#include <vector>
-#include <cctype>
 #include "ircserv.hpp"
+#include <sstream>
 
+Message &Message::setCommand(const std::string &cmd)
+{
+	command = cmd;
+	return *this;
+}
 
 // parse request
 Message::Message(std::string &msg)
@@ -58,17 +58,20 @@ std::string Message::totxt() const
 	return txt.str();
 }
 
-Message &Message::addPrefix(const User& usr)
+Message &Message::setPrefix(const User& usr)
 {
-	prefix = usr.nickname;
+	prefix = ':' + usr.nickname + '!' + usr.username + '@' + usr.hostname;
 	return *this;
 }
 
-Message::Message(const int ncmd)
+Message::Message(const User &usr, const int ncmd)
 {
 	std::stringstream cmd;
+	cmd.width(3);
+	cmd.fill('0');
 	cmd << ncmd;
 	command = cmd.str();
+	setPrefix(usr);
 }
 
 Message &Message::addParam(const std::string &prm)
