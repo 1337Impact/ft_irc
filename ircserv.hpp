@@ -63,26 +63,29 @@ class User
 class Channel
 {
 	friend class Server;
+	bool externalMessages;
+	bool inviteOnly;
+	bool moderated;
+	bool priv;
+	bool protectedTopic;
+	bool secret;
 	const std::string name;
 	int limit;
+	std::list<std::string> banMasks;
+	std::set<User *> invited;
+	std::set<User *> members;
+	std::set<User *> speakers;
 	std::string key;
 	std::string topic;
-	std::set<User *> members;
-	bool priv;
-	bool secret;
-	bool inviteOnly;
-	bool protectedTopic;
-	bool externalMessages;
-	bool moderated;
 
 	bool isMember(User *user) const;
 	bool isOperator(const User &usr) const;
 	Channel(const std::string &name, User *usr);
 	const Message addOperator(const std::string &target, const bool give);
-	const Message setBanMask(const std::string &mask);
+	const Message setBanMask(const std::string &mask, const bool give);
 	const Message setClientLimit(const std::string &limit);
-	const Message setKey(const std::string &key);
-	const Message setSpeaker(const std::string &user);
+	const Message setSpeaker(const std::string &user, const bool give);
+	const Message setSecret(const std::string &user, const bool give);
 	int join(User *usr);
 	std::string getChannelModes() const;
 	User *lookUpUser(const std::string &nick);

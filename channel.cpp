@@ -1,8 +1,8 @@
 #include "ircserv.hpp"
 
 Channel::Channel(const std::string &name, User *usr)
-	: name(name), limit(100), priv(false), secret(false), inviteOnly(false),
-	  protectedTopic(true), externalMessages(false), moderated(false)
+	: externalMessages(false), inviteOnly(false), moderated(false), priv(false),
+	  protectedTopic(true), secret(false), name(name), limit(100)
 {
 	members.insert(usr);
 }
@@ -58,36 +58,45 @@ bool Channel::isOperator(const User &usr) const
 	return false;
 }
 
-const Message Channel::addOperator(const std::string &target, const bool give)
+const Message Channel::addOperator(const std::string &target, const bool add)
 {
 	User *usr = lookUpUser(target);
 	if (!usr)
 		return Message(441).addParam(target).addParam(name).addParam(
 			":They aren't on that channel");
-	(void)give;
+	(void)add;
 	return Message();
 }
 
 const Message Channel::setClientLimit(const std::string &limit)
 {
-	(void)limit;
+	int val = atoi(limit.data());
+	if (val > 0)
+		this->limit = val;
 	return Message();
 }
 
-const Message Channel::setBanMask(const std::string &mask)
+const Message Channel::setBanMask(const std::string &mask, const bool add)
 {
-	(void)mask;
-	return Message();
+	return add ? banMasks.push_back(mask)
+			   : (void)banMasks.erase(
+					 find(banMasks.begin(), banMasks.end(), mask)),
+		   Message();
 }
 
-const Message Channel::setSpeaker(const std::string &user)
+const Message Channel::setSpeaker(const std::string &user, const bool add)
 {
-	(void)user;
-	return Message();
-}
-
-const Message Channel::setKey(const std::string &key)
-{
-	(void)key;
+	if (add)
+	{
+		if (User *usr = lookUpUser(user))
+			speakers.insert(usr);
+		return Message(401).addParam(name).addParam(":No such nick/channel");
+	}
+	else
+	{
+		if (User *usr = lookUpUser(user))
+			speakers.erase(std::find(speakers.cbegin(), speakers.cend(), usr));
+		return Message(401).addParam(name).addParam(":No such nick/channel");
+	}
 	return Message();
 }

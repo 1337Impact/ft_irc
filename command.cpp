@@ -150,15 +150,15 @@ const Message Server::mode(User &usr, const Message &req)
 		case 'b':
 			return req.params.size() == 1
 				? Message(461).addParam("MODE").addParam(":Not enough parameters")
-				: chn->setBanMask(req.params[1]);
+				: chn->setBanMask(req.params[1], req.params[0][0] == '+');
 		case 'v':
 			return req.params.size() == 1
 				? Message(461).addParam("MODE").addParam(":Not enough parameters")
-				: chn->setSpeaker(req.params[1]);
+				: chn->setSpeaker(req.params[1], req.params[0][0] == '+');
 		case 'k':
 			return req.params.size() == 1
 				? Message(461).addParam("MODE").addParam(":Not enough parameters")
-				: chn->setKey(req.params[1]);
+				: chn->setSecret(req.params[1], req.params[0][0] == '+');
 		}
 	}
 	return Message(501).addParam(":Unknown MODE flag");
