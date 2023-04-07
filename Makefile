@@ -1,6 +1,6 @@
 NAME=ircserv
 
-FLAGS= -Wall -Wextra -Werror -std=c++98 -g -Ofast -flto
+FLAGS= -Wall -Wextra -Werror -std=c++98 -g
 
 SRCS= ircserv.cpp command.cpp message.cpp
 

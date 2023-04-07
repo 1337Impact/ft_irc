@@ -271,15 +271,18 @@ class Server
 	Message nick(User &usr, const Message &req);
 	Message privmsg(User &usr, const Message &req);
 	Message notice(User &usr, const Message &req);
+	Message quit(User &usr, const Message &req);
+
 	Message join(User &usr, const Message &req);
-	Message mode(User &usr, const Message &req);
-	Message invite(User &usr, const Message &req);
-	Message kick(User &usr, const Message &req);
 	Message list(User &usr, const Message &req);
+	Message kick(User &usr, const Message &req);
+	Message invite(User &usr, const Message &req);
+
+	Message mode(User &usr, const Message &req);
 	Message names(User &usr, const Message &req);
 	Message part(User &usr, const Message &req);
-	Message quit(User &usr, const Message &req);
 	Message topic(User &usr, const Message &req);
+
 	Channel *lookUpChannel(const std::string &chn);
 	Server(const int port, const std::string &name);
 	User *lookUpUser(const std::string &nick);

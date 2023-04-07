@@ -33,3 +33,4 @@
 .clang-format
 .clangd
 ircserv
+.vscode

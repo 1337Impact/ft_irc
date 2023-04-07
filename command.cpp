@@ -7,7 +7,12 @@
 
 Message Server::topic(User &usr, const Message &req)
 {
-	(void)usr;
+	if (!usr.hasSecret)
+		return Message(usr, 464).addParam(":Password incorrect");
+	if (!usr.isRegistered())
+		return Message(usr, 451).addParam(":You have not registered");
+	if (req.params.size() < 1)
+		return Message(usr, 461).addParam("TOPIC").addParam(":Not enough parameters");
 	Channel *chn = lookUpChannel(req.params[0]);
 	if (chn && !chn->topic.empty())
 		return Message(usr, 332).addParam(req.params[0]).addParam(chn->topic);
@@ -77,21 +82,26 @@ Message Server::list(User &usr, const Message &req)
 	std::string rpl =
 		Message(usr, 321).addParam("Channel").addParam(":Users  Name").totxt();
 	Send(usr.fd, rpl.data(), rpl.size());
-	std::istringstream chnls(req.params[0]);
-	std::string name;
-	while (getline(chnls, name, ','))
+	// if (req.params.size())
 	{
-		Channel *chn = lookUpChannel(name);
-		if ((chn->isPrivate || chn->isSecret) && !chn->isMember(&usr))
+		// std::istringstream chnls(req.params[0]);
+		std::string name;
+		// while (getline(chnls, name, ','))
+		for (std::vector<Channel>::iterator chn = channels.begin(); chn != channels.end(); chn++)
 		{
-			rpl = Message(usr, 322)
-					  .addParam(chn->name)
-					  .addParam(std::to_string(chn->members.size()))
-					  .addParam(chn->topic)
-					  .totxt();
-			Send(usr.fd, rpl.data(), rpl.size());
+			// Channel *chn = lookUpChannel(name);
+			// if (chn && chn->isMember(&usr))
+			{
+				rpl = Message(usr, 322)
+						.addParam(chn->name)
+						.addParam(std::to_string(chn->members.size()))
+						.addParam(chn->topic)
+						.totxt();
+				Send(usr.fd, rpl.data(), rpl.size());
+			}
 		}
 	}
+	(void)req;
 	return Message(usr, 323).addParam(":End of /LIST");
 }
 
@@ -232,8 +242,6 @@ Message Server::quit(User &usr, const Message &req)
 
 Message Server::pass(User &usr, const Message &req)
 {
-	if (usr.hasSecret)
-		return Message();
 	if (req.params.empty())
 		return Message(usr, 461).addParam("PASS").addParam(":Not enough parameters");
 	if (usr.isRegistered())
@@ -246,12 +254,12 @@ Message Server::pass(User &usr, const Message &req)
 
 Message Server::user(User &usr, const Message &req)
 {
-	if (req.params.size() < 4)
-		return Message(usr, 461).addParam("USER").addParam(":Not enough parameters");
-	if (usr.isRegistered())
-		return Message(usr, 462).addParam(":You may not reregister");
 	if (!usr.hasSecret)
 		return Message(usr, 464).addParam(":Password incorrect");
+	if (usr.isRegistered())
+		return Message(usr, 462).addParam(":You may not reregister");
+	if (req.params.size() < 4)
+		return Message(usr, 461).addParam("USER").addParam(":Not enough parameters");
 	bool registered = usr.isRegistered();
 	usr.username = req.params[0];
 	usr.hostname = req.params[1];
@@ -278,7 +286,7 @@ Message Server::nick(User &usr, const Message &req)
 	usr.nickname = req.params[0];
 	return !registered && usr.isRegistered()
 		? Message(usr, 1).setPrefix(usr).addParam(":Welcome to the ft_irc Network")
-		: Message();
+		: Message().setPrefix(usr).addParam(":Your nickname has been changed");
 }
 
 Message Server::privmsg(User &usr, const Message &req)
@@ -373,12 +381,7 @@ Message Server::join(User &usr, const Message &req)
 				topic(usr, Message().setCommand("TOPIC").addParam(_ch)).totxt();
 			Send(usr.fd, _tmp.data(), _tmp.size());
 
-			// 3 reply to usr with channel members
-			// std::string res2(Message(353)
-			// 					.addParam(usr.nickname)
-			// 					.addParam(_ch)
-			// 					.addParam(channelIterator->get_memebers())
-			// 					.totxt());
+			// 3 reply to usr with channel member
 			_tmp =
 				names(usr, Message().setCommand("NAMES").addParam(_ch)).totxt();
 			Send(usr.fd, _tmp.data(), _tmp.size());
@@ -417,5 +420,6 @@ Message Server::join(User &usr, const Message &req)
 
 Message Server::notice(User &usr, const Message &req)
 {
+	//ERR_CANNOTSENDTOCHAN to check
 	return privmsg(usr, req), Message();
 }

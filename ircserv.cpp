@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <sstream>
+#include <strings.h>
 #include <unistd.h>
 
 User::User(const int fd) : hasSecret(false), fd(fd)
@@ -20,9 +21,9 @@ bool User::validNick(const std::string &nick)
 	if (!isalpha(nick[0]))
 		return false;
 	for (size_t i = 1; i < nick.size(); i++)
-		if (!isalnum(nick[i]) && nick[i] != '-' && nick[i] != '|' &&
-			nick[i] != '[' && nick[i] != ']' && nick[i] != '\\' &&
-			nick[i] != '`' && nick[i] != '^' && nick[i] != '{' && nick[i] != '}')
+		if (!isalnum(nick[i]) && nick[i] != '-' && nick[i] != '[' &&
+			nick[i] != ']' && nick[i] != '\\' && nick[i] != '`' &&
+			nick[i] != '^' && nick[i] != '{' && nick[i] != '}')
 			return false;
 	return true;
 }
@@ -84,8 +85,6 @@ void Server::process(User &usr, const Message &req)
 		res = invite(usr, req).totxt();
 	else if (req.command == "KICK")
 		res = kick(usr, req).totxt();
-	else if (req.command == "™MODE")
-		res = mode(usr, req).totxt();
 	else if (req.command == "LIST")
 		res = list(usr, req).totxt();
 	else if (req.command == "NAMES")
@@ -96,9 +95,11 @@ void Server::process(User &usr, const Message &req)
 		res = quit(usr, req).totxt();
 	else if (req.command == "TOPIC")
 		res = topic(usr, req).totxt();
-	else
-		res =
-			Message(usr, 421).addParam(req.command).addParam(":Unknown command").totxt();
+	else if (!req.command.empty())
+		res = Message(usr, 421)
+				  .addParam(req.command)
+				  .addParam(":Unknown command")
+				  .totxt();
 	if (!res.empty() && send(usr.fd, res.data(), res.size(), 0) == -1)
 		BlockingError("send");
 }
@@ -136,17 +137,21 @@ void Server::receive(std::vector<pollfd>::const_iterator &con)
 	User &usr = users.at(con->fd);
 	if (nbytes <= 0)
 	{
+		std::cout << "a connection must be closed" << std::endl;
 		if (nbytes == -1)
 			BlockingError("recv");
 		quit(usr, QUIT(usr));
 		cons.erase(con);
+		std::cout << "a connection has been closed" << std::endl;
 	}
-	else if (usr.buf.append(buf).size() >= 512)
+	else if (usr.buf.size() + nbytes >= 512)
 	{
 		std::cerr << "Message is too large" << std::endl;
 		usr.buf.clear();
 	}
-	else if (!usr.buf.compare(nbytes - 2, 2, "\r\n"))
+	else if (usr.buf.append(buf),
+			 usr.buf.size() >= 2 &&
+				 !usr.buf.compare(usr.buf.size() - 2, 2, "\r\n"))
 	{
 		try
 		{

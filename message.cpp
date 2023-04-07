@@ -35,7 +35,7 @@ Message::Message(std::string &msg)
 			params.push_back(trailing);
 			break;
 		}
-		else{
+		else if (msg[i]) {
 			std::string param;
 			for (; msg[i] != ' ' && i < msg.size(); i++)
 				param += msg[i];
