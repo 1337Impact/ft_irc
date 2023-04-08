@@ -64,7 +64,6 @@ class Channel
 	friend class Server;
 	bool hasExternalMessages;
 	bool hasProtectedTopic;
-	bool is_invite_only;
 	bool isInviteOnly;
 	bool isModerated;
 	bool isPrivate;
@@ -120,18 +119,20 @@ class Channel
 			std::cout << "User is already a member" << std::endl;
 			return (4);
 		}
-		if (is_invite_only &&
+		if (isInviteOnly &&
 			std::find(invited.begin(), invited.end(), &usr) == invited.end())
 			return (1);
-		if (!key.empty() &&
-			key !=
-				_key) // still need to no if key is ignored when it is not set in channel
+		if (!key.empty() && key != _key)
 			return (2);
 		if (members.size() == limit)
 			return (3);
 		else
 		{
 			members.push_back(ChannelMember(usr));
+			std::vector<User *>::iterator kicked =
+				find(invited.begin(), invited.end(), &usr);
+			if (kicked != invited.end())
+				invited.erase(kicked);
 			return (0);
 		}
 	}
@@ -206,8 +207,7 @@ class Channel
 			return Message(441).addParam(target).addParam(name).addParam(
 				":They aren't on that channel");
 		(void)add;
-		return Message().setCommand("REPLY").addParam(
-			":Operator has been added");
+		return Message().setCommand("REPLY").addParam(":Operator has been added");
 	}
 
 	const Message setChannelLimit(const std::string &limit)
@@ -229,8 +229,7 @@ class Channel
 		return add ? banMasks.push_back(mask)
 				   : (void)banMasks.erase(
 						 find(banMasks.begin(), banMasks.end(), mask)),
-			   Message().setCommand("REPLY").addParam(
-				   ":Ban mask has been added");
+			   Message().setCommand("REPLY").addParam(":Ban mask has been added");
 	}
 
 	const Message setSpeaker(const std::string &user, const bool add)
@@ -247,8 +246,7 @@ class Channel
 				speakers.erase(std::find(speakers.begin(), speakers.end(), mem));
 			return Message(401).addParam(name).addParam(":No such nick/channel");
 		}
-		return Message().setCommand("REPLY").addParam(
-			":Speaker has been added");
+		return Message().setCommand("REPLY").addParam(":Speaker has been added");
 	}
 
 	const Message setSecret(const std::string &key, const bool add)

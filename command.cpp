@@ -29,6 +29,8 @@ Message Server::kick(User &usr, const Message &req)
 		return Message(464).addParam(":Password incorrect");
 	if (!usr.isRegistered())
 		return Message(451).addParam(":You have not registered");
+	if (req.params.size() < 2)
+		return Message(461).addParam("KICK").addParam(":Not enough parameters");
 	Channel *chn = lookUpChannel(req.params[0]);
 	if (!chn)
 		return Message(403).addParam(req.params[0]).addParam(":No such channel");
@@ -40,12 +42,15 @@ Message Server::kick(User &usr, const Message &req)
 		return Message(482)
 			.addParam(req.params[0])
 			.addParam(":You're not channel operator");
-	User *mem = lookUpUser(req.params[0]);
+	User *mem = lookUpUser(req.params[1]);
+	if (!mem)
+		return Message(401).addParam(req.params[0]).addParam(":No such nick/channel");
 	if (!chn->isMember(*mem))
 		return Message(441)
 			.addParam(req.params[1])
 			.addParam(req.params[0])
 			.addParam(":They aren't on that channel");
+	chn->remove(mem);
 	return Message();
 }
 
@@ -142,7 +147,7 @@ Message Server::invite(User &usr, const Message &req)
 		return Message(451).addParam(":You have not registered");
 	if (req.params.size() < 2)
 		return Message(461).addParam("INVITE").addParam(":Not enough parameters");
-	Channel *chn = nullptr;
+	Channel *chn = lookUpChannel(req.params[1]);
 	if (!chn)
 		return Message(403).addParam(req.params[0]).addParam(":No such channel");
 	if (!chn->isMember(usr))
@@ -158,7 +163,7 @@ Message Server::invite(User &usr, const Message &req)
 		return Message(401).addParam(":No such nick/channel");
 	if (chn->isMember(*mem))
 		return Message(443).addParam(req.params[0]).addParam(":is already on channel");
-	chn->join(*mem, "");
+	chn->invited.push_back(mem);
 	return Message(341).addParam(req.params[0]).addParam(req.params[1]);
 }
 
