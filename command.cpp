@@ -261,7 +261,7 @@ Message Server::pass(User &usr, const Message &req)
 	if (password != req.params[0])
 		return Message(464).addParam(":Password incorrect");
 	usr.hasSecret = true;
-	return Message();
+	return Message().setCommand("REPLY").addParam(":Your password has been changed");
 }
 
 Message Server::user(User &usr, const Message &req)
