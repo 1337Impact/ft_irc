@@ -139,7 +139,6 @@ void Server::receive(std::vector<pollfd>::const_iterator &con)
 			BlockingError("recv");
 		quit(usr, QUIT(usr));
 		cons.erase(con);
-		std::cout << "A connection has been closed" << std::endl;
 	}
 	else if (usr.buf.size() + nbytes > 512)
 	{
