@@ -206,7 +206,8 @@ class Channel
 			return Message(441).addParam(target).addParam(name).addParam(
 				":They aren't on that channel");
 		(void)add;
-		return Message().setCommand("REPLY").addParam(":Operator has been added");
+		return Message(300).setCommand("REPLY").addParam(
+			":Operator has been added");
 	}
 
 	const Message setChannelLimit(const std::string &limit)
@@ -215,9 +216,9 @@ class Channel
 		if (val >= (ssize_t)members.size())
 			this->limit = val;
 		else
-			return Message().setCommand("REPLY").addParam(
-				":Limit is below members count");
-		return Message()
+			return Message(696).addParam(name).addParam("l").addParam(limit).addParam(
+				":limit is below current members count");
+		return Message(300)
 			.setCommand("REPLY")
 			.addParam(":Limit has been set to")
 			.addParam(limit);
@@ -228,7 +229,8 @@ class Channel
 		return add ? banMasks.push_back(mask)
 				   : (void)banMasks.erase(
 						 find(banMasks.begin(), banMasks.end(), mask)),
-			   Message().setCommand("REPLY").addParam(":Ban mask has been added");
+			   Message(300).setCommand("REPLY").addParam(
+				   ":Ban mask has been added");
 	}
 
 	const Message setSpeaker(const std::string &user, const bool add)
@@ -245,16 +247,26 @@ class Channel
 				speakers.erase(std::find(speakers.begin(), speakers.end(), mem));
 			return Message(401).addParam(name).addParam(":No such nick/channel");
 		}
-		return Message().setCommand("REPLY").addParam(":Speaker has been added");
+		return Message(300).setCommand("REPLY").addParam(
+			":Speaker has been added");
 	}
 
 	const Message setSecret(const std::string &key, const bool add)
 	{
 		if (add)
+		{
+			if (key.empty())
+				return Message(535).addParam(name).addParam(
+					":Key is not well-formed");
 			this->key = key;
+		}
 		else
 			this->key.clear();
-		return Message().setCommand("REPLY").addParam(":Secret has been set");
+		return Message(300).setCommand("REPLY").addParam(":Secret has been set");
+	}
+	static bool isValidName(const std::string &name)
+	{
+		return !name.empty();
 	}
 };
 

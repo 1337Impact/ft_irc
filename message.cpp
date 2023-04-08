@@ -10,7 +10,6 @@ Message &Message::setCommand(const std::string &cmd)
 // parse request
 Message::Message(std::string &msg)
 {
-	msg.erase(msg.end() - 2, msg.end());
 	size_t i = 0;
 
 	// handling prefix

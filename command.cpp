@@ -46,7 +46,7 @@ Message Server::kick(User &usr, const Message &req)
 			.addParam(req.params[1])
 			.addParam(req.params[0])
 			.addParam(":They aren't on that channel");
-	return Message();
+	return Message(300);
 }
 
 Message Server::names(User &usr, const Message &req)
@@ -56,7 +56,7 @@ Message Server::names(User &usr, const Message &req)
 	if (!usr.isRegistered())
 		return Message(451).addParam(":You have not registered");
 	if (req.params.empty())
-		return Message().setCommand("ERROR").addParam(":not enough parameters");
+		return Message(461).setCommand("NAMES").addParam(":Not enough parameters");
 	std::istringstream chnls(req.params[0]);
 	std::string name;
 	while (getline(chnls, name, ','))
@@ -65,7 +65,7 @@ Message Server::names(User &usr, const Message &req)
 		if (!chn)
 			return Message(403).addParam(name).addParam(":No such channel");
 		if (chn->isSecret && !chn->isMember(usr))
-			return Message();
+			continue;
 		Message res = Message(353).addParam(chn->isPrivate      ? "*"
 												: chn->isSecret ? "@"
 																: "=");
@@ -162,28 +162,28 @@ Message Server::mode(User &usr, const Message &req)
 		case 'p':
 			if (!chn->isSecret)
 				chn->isPrivate = req.params[1][0] == '+';
-			return Message().setCommand("REPLY").addParam(
+			return Message(300).setCommand("REPLY").addParam(
 				":Private flag has been set");
 		case 's':
 			if (!chn->isPrivate)
 				chn->isSecret = req.params[1][0] == '+';
-			return Message().setCommand("REPLY").addParam(
+			return Message(300).setCommand("REPLY").addParam(
 				":Secret flag has been set");
 		case 'i':
 			return chn->isInviteOnly = req.params[1][0] == '+',
-				   Message().setCommand("REPLY").addParam(
+				   Message(300).setCommand("REPLY").addParam(
 					   ":Invite flag has been set");
 		case 't':
 			return chn->hasProtectedTopic = req.params[1][0] == '+',
-				   Message().setCommand("REPLY").addParam(
+				   Message(300).setCommand("REPLY").addParam(
 					   ":Protected topic has been set");
 		case 'n':
 			return chn->hasExternalMessages = req.params[1][0] == '+',
-				   Message().setCommand("REPLY").addParam(
+				   Message(300).setCommand("REPLY").addParam(
 					   ":External messages has been set");
 		case 'm':
 			return chn->isModerated = req.params[1][0] == '+',
-				   Message().setCommand("REPLY").addParam(
+				   Message(300).setCommand("REPLY").addParam(
 					   ":Moderated flag has been set");
 		case 'o':
 			return req.params.size() != 3
@@ -235,7 +235,7 @@ Message Server::part(User &usr, const Message &req)
 			Send(Message(403).addParam(name).addParam(":No such channel"), usr);
 		}
 	}
-	return Message();
+	return Message(300);
 }
 
 Message Server::quit(User &usr, const Message &req)
@@ -248,7 +248,7 @@ Message Server::quit(User &usr, const Message &req)
 		if (chn->isMember(usr))
 			chn->broadcast(txt, usr);
 	users.erase(usr.fd);
-	return Message();
+	return Message(300);
 }
 
 Message Server::pass(User &usr, const Message &req)
@@ -260,7 +260,7 @@ Message Server::pass(User &usr, const Message &req)
 	if (password != req.params[0])
 		return Message(464).addParam(":Password incorrect");
 	usr.hasSecret = true;
-	return Message().setCommand("REPLY").addParam(":Your password is set up");
+	return Message(300).setCommand("REPLY").addParam(":Your password is set up");
 }
 
 Message Server::user(User &usr, const Message &req)
@@ -278,7 +278,7 @@ Message Server::user(User &usr, const Message &req)
 	usr.realname = req.params[3];
 	return !registered && usr.isRegistered()
 		? Message(1).addParam(":Welcome to the ft_irc Network")
-		: Message().setCommand("REPLY").addParam(":Your user info are set up");
+		: Message(300).setCommand("REPLY").addParam(":Your user info are set up");
 }
 
 Message Server::nick(User &usr, const Message &req)
@@ -297,7 +297,7 @@ Message Server::nick(User &usr, const Message &req)
 	usr.nickname = req.params[0];
 	return !registered && usr.isRegistered()
 		? Message(1).addParam(":Welcome to the ft_irc Network")
-		: Message().setCommand("REPLY").addParam(
+		: Message(300).setCommand("REPLY").addParam(
 			  ":Your nickname has been changed");
 }
 
@@ -341,7 +341,7 @@ Message Server::privmsg(User &usr, const Message &req)
 		else
 			return Message(401).addParam(name).addParam(":No such nick/channel");
 	}
-	return Message();
+	return Message(300);
 }
 
 Message Server::join(User &usr, const Message &req)
@@ -365,7 +365,8 @@ Message Server::join(User &usr, const Message &req)
 		int _isKey = 0;
 		if (req.params.size() > 1)
 			_isKey = std::getline(_ss2, _key, ',') ? 1 : 0;
-
+		if (!Channel::isValidName(_ch))
+			Send(Message(476).addParam(_ch).addParam(":Bad Channel Mask"), usr);
 		std::vector<Channel>::iterator channelIterator =
 			std::find(channels.begin(), channels.end(), _ch);
 		int status = 0;
@@ -416,13 +417,14 @@ Message Server::join(User &usr, const Message &req)
 		}
 		case 4: // already in channel
 		{
-			Send(Message().setCommand("ERROR").addParam(":is already on channel"),
+			Send(Message(400).addParam("JOIN").addParam(
+					 ":you're already on channel"),
 				 usr);
 			break;
 		}
 		}
 	}
-	return Message();
+	return Message(300);
 }
 
 Message Server::notice(User &usr, const Message &req)
