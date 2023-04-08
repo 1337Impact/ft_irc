@@ -19,8 +19,8 @@ Message Server::topic(User &usr, const Message &req)
 	if (req.params.size() == 2)
 		chn->topic = req.params[1];
 	if (!chn->topic.empty())
-		return Message(332).addParam(req.params[0]).addParam(chn->topic); // RPL_TOPIC
-	return Message(331).addParam(req.params[0]).addParam(":No topic is set"); // RPL_NOTOPIC
+		return Message(332).addParam(req.params[0]).addParam(chn->topic);
+	return Message(331).addParam(req.params[0]).addParam(":No topic is set");
 }
 
 Message Server::kick(User &usr, const Message &req)
@@ -57,11 +57,13 @@ Message Server::names(User &usr, const Message &req)
 		return Message(451).addParam(":You have not registered");
 	if (req.params.empty())
 	{
-		for (std::map<const int, User>::iterator usr = users.begin();
-			 usr != users.end();
-			 usr++)
-			Send(Message(461).addParam("//TODO: list all names here"),
-				 usr->second);
+		Message res(353);
+		for (std::map<const int, User>::iterator clt = users.begin();
+			 clt != users.end();
+			 clt++)
+			res.params.empty() ? res.addParam(':' + clt->second.nickname)
+							   : res.addParam(clt->second.nickname);
+		Send(res, usr);
 	}
 	else
 	{
@@ -72,21 +74,24 @@ Message Server::names(User &usr, const Message &req)
 			Channel *chn = lookUpChannel(name);
 			if (!chn)
 				return Message(403).addParam(name).addParam(":No such channel");
-			// if (chn->isSecret && !chn->isMember(usr))
-			// 	continue;
-			Message res = Message(353).addParam(chn->isPrivate      ? "*"
-													: chn->isSecret ? "@"
-																	: "=");
+			Message res = Message(353)
+							  .addParam(chn->isPrivate      ? "*"
+											: chn->isSecret ? "@"
+															: "=")
+							  .addParam(chn->name);
 			for (std::vector<Channel::ChannelMember>::const_iterator it =
 					 chn->members.begin();
 				 it != chn->members.end();
 				 it++)
-				res.addParam(it->usr.nickname);
+				res.params.size() == 2 ? res.addParam(':' + it->usr.nickname)
+									   : res.addParam(it->usr.nickname);
 			const std::string str = res.totxt();
 			Send(res, usr);
 		}
 	}
-	return Message(366).addParam(req.params[0]).addParam(":End of /NAMES list");
+	return req.params.empty()
+		? Message(366).addParam(":End of /NAMES list")
+		: Message(366).addParam(req.params[0]).addParam(":End of /NAMES list");
 }
 
 Message Server::list(User &usr, const Message &req)
@@ -240,18 +245,23 @@ Message Server::part(User &usr, const Message &req)
 		if (Channel *channel = lookUpChannel(name))
 		{
 			if (channel->isMember(usr))
-				channel->kick(&usr);
-			else
 			{
+				std::cout << usr.nickname << " wants to leave" << std::endl;
+				channel->remove(&usr);
+				channel->broadcast(Message()
+									   .setPrefix(usr)
+									   .setCommand("PART")
+									   .addParam(channel->name)
+									   .totxt(),
+								   usr);
+			}
+			else
 				Send(Message(442).addParam(name).addParam(
 						 ":You're not on that channel"),
 					 usr);
-			}
 		}
 		else
-		{
 			Send(Message(403).addParam(name).addParam(":No such channel"), usr);
-		}
 	}
 	return Message();
 }
@@ -339,24 +349,32 @@ Message Server::privmsg(User &usr, const Message &req)
 	{
 		if (User *user = lookUpUser(name))
 		{
-			for (unsigned rec = 0; rec < users.size(); rec++)
-				if (users[rec]->nickname == user->nickname)
-					return Message(407).addParam(name).addParam(
-						":Duplicate recipients. No message delivered");
-			users.push_back(user);
-			for (unsigned rec = 0; rec < users.size(); rec++)
-				Send(req, *users[rec]);
+			if (find(users.begin(), users.end(), user) != users.end())
+				Send(Message(407).addParam(name).addParam(
+						 ":Duplicate recipients. No message delivered"),
+					 usr);
+			else
+			{
+				users.push_back(user);
+				for (unsigned rec = 0; rec < users.size(); rec++)
+					Send(req, *users[rec]);
+			}
 		}
 		else if (Channel *chn = lookUpChannel(name))
 		{
-			for (std::vector<Channel *>::const_iterator rec = channels.begin();
-				 rec != channels.end();
-				 rec++)
-				if ((*rec)->name == chn->name)
-					return Message(407).addParam(name).addParam(
-						":Duplicate recipients. No message delivered");
-			channels.push_back(chn);
-			chn->broadcast(req.totxt(), usr);
+			if (find(channels.begin(), channels.end(), chn) != channels.end())
+				Send(Message(407).addParam(name).addParam(
+						 ":Duplicate recipients. No message delivered"),
+					 usr);
+			else if (!chn->isMember(usr))
+				Send(Message(404).addParam(chn->name).addParam(
+						 ":Cannot send to channel"),
+					 usr);
+			else
+			{
+				channels.push_back(chn);
+				chn->broadcast(req.totxt(), usr);
+			}
 		}
 		else
 			return Message(401).addParam(name).addParam(":No such nick/channel");
@@ -408,9 +426,9 @@ Message Server::join(User &usr, const Message &req)
 		case 0:
 		{
 			channelIterator->broadcast(
-				Message(332).setPrefix(usr).addParam("JOIN").addParam(_ch).totxt(),
+				Message().setPrefix(usr).setCommand("JOIN").addParam(_ch).totxt(),
 				usr);
-			Send(Message(332).setPrefix(usr).addParam("JOIN").addParam(_ch), usr);
+			Send(Message().setPrefix(usr).setCommand("JOIN").addParam(_ch), usr);
 			Send(topic(usr, Message().setCommand("TOPIC").addParam(_ch)), usr);
 			Send(names(usr, Message().setCommand("TOPIC").addParam(_ch)), usr);
 			break;

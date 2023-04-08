@@ -179,7 +179,7 @@ class Channel
 		return false;
 	}
 	Channel(const std::string &name, User *usr);
-	void kick(User *user)
+	void remove(User *user)
 	{
 		members.erase(std::find(members.begin(), members.end(), *user));
 	}
