@@ -11,14 +11,13 @@ OBJS= $(SRCS:.cpp=.o)
 all: $(NAME)
 
 $(NAME) : $(OBJS)
-	c++ $(FLAGS) $(OBJS) -o $(NAME)
+	@c++ $(FLAGS) $(OBJS) -o $(NAME)
 
 %.o: %.cpp
-	c++ -c $(FLAGS) $< -o $@
+	@c++ -c $(FLAGS) $< -o $@
 
 clean:
 	@rm -f $(OBJS)
-	# echo $(OBJS)
 
 fclean: clean
 	@rm -f $(NAME)
