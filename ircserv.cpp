@@ -66,42 +66,38 @@ Server &Server::getInstance(const int port, const std::string &pass)
 
 void Server::process(User &usr, const Message &req)
 {
-	std::string res;
+	Message res;
 	if (req.command == "PASS")
-		res = pass(usr, req).totxt();
+		res = pass(usr, req);
 	else if (req.command == "USER")
-		res = user(usr, req).totxt();
+		res = user(usr, req);
 	else if (req.command == "NICK")
-		res = nick(usr, req).totxt();
+		res = nick(usr, req);
 	else if (req.command == "PRIVMSG")
-		res = privmsg(usr, req).totxt();
+		res = privmsg(usr, req);
 	else if (req.command == "NOTICE")
-		res = notice(usr, req).totxt();
+		res = notice(usr, req);
 	else if (req.command == "JOIN")
-		res = join(usr, req).totxt();
+		res = join(usr, req);
 	else if (req.command == "MODE")
-		res = mode(usr, req).totxt();
+		res = mode(usr, req);
 	else if (req.command == "INVITE")
-		res = invite(usr, req).totxt();
+		res = invite(usr, req);
 	else if (req.command == "KICK")
-		res = kick(usr, req).totxt();
+		res = kick(usr, req);
 	else if (req.command == "LIST")
-		res = list(usr, req).totxt();
+		res = list(usr, req);
 	else if (req.command == "NAMES")
-		res = names(usr, req).totxt();
+		res = names(usr, req);
 	else if (req.command == "PART")
-		res = part(usr, req).totxt();
+		res = part(usr, req);
 	else if (req.command == "QUIT")
-		res = quit(usr, req).totxt();
+		res = quit(usr, req);
 	else if (req.command == "TOPIC")
-		res = topic(usr, req).totxt();
+		res = topic(usr, req);
 	else if (!req.command.empty())
-		res = Message(usr, 421)
-				  .addParam(req.command)
-				  .addParam(":Unknown command")
-				  .totxt();
-	if (!res.empty() && send(usr.fd, res.data(), res.size(), 0) == -1)
-		BlockingError("send");
+		res = Message(421).addParam(req.command).addParam(":Unknown command");
+	Send(res, usr);
 }
 
 Server::~Server()
@@ -110,6 +106,7 @@ Server::~Server()
 		 con != cons.end();
 		 con++)
 		Close(con->fd);
+	std::cout << "Closing all left connections" << std::endl;
 }
 
 Server::Server(const int port, const std::string &pass)
@@ -137,12 +134,12 @@ void Server::receive(std::vector<pollfd>::const_iterator &con)
 	User &usr = users.at(con->fd);
 	if (nbytes <= 0)
 	{
-		std::cout << "a connection must be closed" << std::endl;
+		std::cout << "A connection must be closed" << std::endl;
 		if (nbytes == -1)
 			BlockingError("recv");
 		quit(usr, QUIT(usr));
 		cons.erase(con);
-		std::cout << "a connection has been closed" << std::endl;
+		std::cout << "A connection has been closed" << std::endl;
 	}
 	else if (usr.buf.size() + nbytes >= 512)
 	{
@@ -153,18 +150,28 @@ void Server::receive(std::vector<pollfd>::const_iterator &con)
 			 usr.buf.size() >= 2 &&
 				 !usr.buf.compare(usr.buf.size() - 2, 2, "\r\n"))
 	{
+		std::cout << "Complete message => " << '"';
+		std::cout.write(usr.buf.data(), usr.buf.size() - 2);
+		std::cout << '"' << std::endl;
 		try
 		{
 			const Message req = Message(usr.buf).setPrefix(usr);
+			std::cout << "[prefix]: " << req.prefix << std::endl;
+			std::cout << "[command]: " << req.command << std::endl;
+			for (unsigned i = 0; i < req.params.size(); i++)
+				std::cout << "[param]: " << req.params[i] << std::endl;
 			req.command == "QUIT" ? (quit(usr, req), (void)cons.erase(con))
 								  : process(usr, req);
 		}
 		catch (const char *err)
 		{
-			std::cerr << err << std::endl;
+			std::cerr << "Message parsing error: " << err << std::endl;
 		}
 		usr.buf.clear();
 	}
+	else
+		std::cout << "Incomplete message, waiting for incoming data later"
+				  << std::endl;
 }
 
 void Server::eventloop()
@@ -186,7 +193,7 @@ void Server::eventloop()
 			{
 				cons.push_back(con);
 				users.insert(std::pair<const int, User>(con.fd, User(con.fd)));
-				std::cout << "new accepted connection" << std::endl;
+				std::cout << "New accepted connection" << std::endl;
 			}
 			evts--;
 		}

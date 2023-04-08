@@ -13,12 +13,15 @@ Message::Message(std::string &msg)
 	msg.erase(msg.end() - 2, msg.end());
 	size_t i = 0;
 
-	//handling prefix
-	for (; msg[i] == ' ' && i < msg.size(); i++); //temporary
+	// handling prefix
+	for (; msg[i] == ' ' && i < msg.size(); i++)
+		; // temporary
 	if (msg[i] == ':')
-		for (; msg[i] != ' ' && i < msg.size(); i++);
-	for (; msg[i] == ' ' && i < msg.size(); i++);
-	//command
+		for (; msg[i] != ' ' && i < msg.size(); i++)
+			;
+	for (; msg[i] == ' ' && i < msg.size(); i++)
+		;
+	// command
 	for (; msg[i] != ' ' && i < msg.size(); i++)
 	{
 		if (!isalpha(msg[i]))
@@ -28,14 +31,16 @@ Message::Message(std::string &msg)
 	// handle params
 	while (i < msg.size())
 	{
-		for (; msg[i] == ' ' && i < msg.size(); i++);
+		for (; msg[i] == ' ' && i < msg.size(); i++)
+			;
 		if (msg[i] == ':')
 		{
 			std::string trailing(msg.begin() + i, msg.end());
 			params.push_back(trailing);
 			break;
 		}
-		else if (msg[i]) {
+		else if (msg[i])
+		{
 			std::string param;
 			for (; msg[i] != ' ' && i < msg.size(); i++)
 				param += msg[i];
@@ -58,20 +63,20 @@ std::string Message::totxt() const
 	return txt.str();
 }
 
-Message &Message::setPrefix(const User& usr)
+Message &Message::setPrefix(const User &usr)
 {
 	prefix = ':' + usr.nickname + '!' + usr.username + '@' + usr.hostname;
 	return *this;
 }
 
-Message::Message(const User &usr, const int ncmd)
+Message::Message(const int ncmd)
 {
 	std::stringstream cmd;
 	cmd.width(3);
 	cmd.fill('0');
 	cmd << ncmd;
 	command = cmd.str();
-	setPrefix(usr);
+	prefix = ":irc.42.com";
 }
 
 Message &Message::addParam(const std::string &prm)
@@ -82,4 +87,5 @@ Message &Message::addParam(const std::string &prm)
 
 Message::Message()
 {
+	prefix = ":irc.42.com";
 }

@@ -2,7 +2,6 @@
 #define IRCSERV_HPP
 
 #include <iostream>
-#include <vector>
 #include <map>
 #include <netinet/in.h>
 #include <set>
@@ -14,9 +13,6 @@
 
 #define BlockingError(func) \
 	std::cerr << func << ": " << strerror(EWOULDBLOCK) << std::endl
-#define Send(a, b, c)           \
-	if (send(a, b, c, 0) == -1) \
-	BlockingError("send")
 #define Close(sockfd)        \
 	if (close(sockfd) == -1) \
 	BlockingError("close")
@@ -38,7 +34,7 @@ struct Message
 	Message &addParam(const std::string &prm);
 	Message &setCommand(const std::string &cmd);
 	Message();
-	Message(const User &usr, const int ncmd);
+	Message(const int ncmd);
 	Message(std::string &msg);
 	Message &setPrefix(const User &usr);
 };
@@ -74,7 +70,7 @@ class Channel
 	bool isPrivate;
 	bool isSecret;
 	const std::string name;
-	int limit;
+	size_t limit;
 	size_t max_members;
 	std::vector<std::string> banMasks;
 	std::vector<User *> invited;
@@ -96,13 +92,8 @@ class Channel
 
 	friend bool operator==(const ChannelMember &mem, const User &user)
 	{
-		return mem.usr.username == user.username;
+		return mem.usr.nickname == user.nickname;
 	}
-
-	// friend bool operator==(const ChannelMember &mem, const std::string &username)
-	// {
-	// 	return mem.usr.username == username;
-	// }
 
 	friend bool operator==(const Channel &chn, const std::string &name)
 	{
@@ -124,6 +115,11 @@ class Channel
 
 	int join(User &usr, std::string _key)
 	{
+		if (this->isMember(usr))
+		{
+			std::cout << "User is already a member" << std::endl;
+			return (4);
+		}
 		if (is_invite_only &&
 			std::find(invited.begin(), invited.end(), &usr) == invited.end())
 			return (1);
@@ -131,7 +127,7 @@ class Channel
 			key !=
 				_key) // still need to no if key is ignored when it is not set in channel
 			return (2);
-		if (members.size() == max_members)
+		if (members.size() == limit)
 			return (3);
 		else
 		{
@@ -144,8 +140,9 @@ class Channel
 	{
 		std::vector<ChannelMember>::const_iterator it;
 		for (it = members.begin(); it != members.end(); it++)
-			if (skip.username != (*it).usr.username)
-				Send(it->usr.fd, res.data(), res.size());
+			if (skip.nickname != (*it).usr.nickname)
+				if (send(it->usr.fd, res.data(), res.size(), 0) == -1)
+					BlockingError("send");
 	}
 
 	std::string get_memebers(void)
@@ -172,12 +169,12 @@ class Channel
 		return (nullptr);
 	}
 
-	bool isMember(User *user) const
+	bool isMember(User &user) const
 	{
 		for (std::vector<ChannelMember>::const_iterator it = members.begin();
 			 it != members.end();
 			 it++)
-			if (user->username == it->usr.username)
+			if (user.nickname == it->usr.nickname)
 				return true;
 		return false;
 	}
@@ -197,27 +194,33 @@ class Channel
 		for (std::vector<ChannelMember>::const_iterator it = members.begin();
 			 it != members.end();
 			 it++)
-			if (usr.username == it->usr.username)
-				return it->usr.is_oper;
+			if (usr.nickname == it->usr.nickname)
+				return it->is_oper;
 		return false;
 	}
 
-	const Message addOperator(const User &usr, const std::string &target, const bool add)
+	const Message addOperator(const std::string &target, const bool add)
 	{
 		User *mem = lookUpUser(target);
 		if (!mem)
-			return Message(usr, 441).addParam(target).addParam(name).addParam(
+			return Message(441).addParam(target).addParam(name).addParam(
 				":They aren't on that channel");
 		(void)add;
-		return Message();
+		return Message().setCommand("REPLY").addParam(":Operator has been added");
 	}
 
-	const Message setClientLimit(const std::string &limit)
+	const Message setChannelLimit(const std::string &limit)
 	{
-		int val = atoi(limit.data());
-		if (val > 0)
+		ssize_t val = atoi(limit.data());
+		if (val >= (ssize_t)members.size())
 			this->limit = val;
-		return Message();
+		else
+			return Message().setCommand("REPLY").addParam(
+				":Limit is below members count");
+		return Message()
+			.setCommand("REPLY")
+			.addParam(":Limit has been set to")
+			.addParam(limit);
 	}
 
 	const Message setBanMask(const std::string &mask, const bool add)
@@ -225,24 +228,24 @@ class Channel
 		return add ? banMasks.push_back(mask)
 				   : (void)banMasks.erase(
 						 find(banMasks.begin(), banMasks.end(), mask)),
-			   Message();
+			   Message().setCommand("REPLY").addParam(":Ban mask has been added");
 	}
 
-	const Message setSpeaker(const User& usr, const std::string &user, const bool add)
+	const Message setSpeaker(const std::string &user, const bool add)
 	{
 		if (add)
 		{
 			if (User *mem = lookUpUser(user))
 				speakers.insert(mem);
-			return Message(usr, 401).addParam(name).addParam(":No such nick/channel");
+			return Message(401).addParam(name).addParam(":No such nick/channel");
 		}
 		else
 		{
 			if (User *mem = lookUpUser(user))
 				speakers.erase(std::find(speakers.begin(), speakers.end(), mem));
-			return Message(usr, 401).addParam(name).addParam(":No such nick/channel");
+			return Message(401).addParam(name).addParam(":No such nick/channel");
 		}
-		return Message();
+		return Message().setCommand("REPLY").addParam(":Speaker has been added");
 	}
 
 	const Message setSecret(const std::string &key, const bool add)
@@ -251,7 +254,7 @@ class Channel
 			this->key = key;
 		else
 			this->key.clear();
-		return Message();
+		return Message().setCommand("REPLY").addParam(":Secret has been set");
 	}
 };
 
@@ -288,6 +291,16 @@ class Server
 	User *lookUpUser(const std::string &nick);
 	void process(User &usr, const Message &req);
 	void receive(std::vector<pollfd>::const_iterator &con);
+	void Send(const Message &res, const User &usr)
+	{
+		if (!res.command.empty())
+		{
+			const std::string _tmp = res.totxt();
+			if (std::cout << "Sending: " << '"' << _tmp << '"' << std::endl,
+				send(usr.fd, _tmp.data(), _tmp.size(), 0) == -1)
+				BlockingError("send");
+		}
+	}
 
   public:
 	static Server &getInstance(const int port, const std::string &pass);

@@ -24,3 +24,6 @@ fclean: clean
 	@rm -f $(NAME)
 
 re: fclean all
+
+run: re
+	./ircserv 6667 pass
