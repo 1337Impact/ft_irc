@@ -56,26 +56,35 @@ Message Server::names(User &usr, const Message &req)
 	if (!usr.isRegistered())
 		return Message(451).addParam(":You have not registered");
 	if (req.params.empty())
-		return Message().setCommand("ERROR").addParam(":not enough parameters");
-	std::istringstream chnls(req.params[0]);
-	std::string name;
-	while (getline(chnls, name, ','))
 	{
-		Channel *chn = lookUpChannel(name);
-		if (!chn)
-			return Message(403).addParam(name).addParam(":No such channel");
-		if (chn->isSecret && !chn->isMember(usr))
-			return Message();
-		Message res = Message(353).addParam(chn->isPrivate      ? "*"
-												: chn->isSecret ? "@"
-																: "=");
-		for (std::vector<Channel::ChannelMember>::const_iterator it =
-				 chn->members.begin();
-			 it != chn->members.end();
-			 it++)
-			res.addParam(it->usr.nickname);
-		const std::string str = res.totxt();
-		Send(res, usr);
+		for (std::map<const int, User>::iterator usr = users.begin();
+			 usr != users.end();
+			 usr++)
+			Send(Message(461).addParam("//TODO: list all names here"),
+				 usr->second);
+	}
+	else
+	{
+		std::istringstream chnls(req.params[0]);
+		std::string name;
+		while (getline(chnls, name, ','))
+		{
+			Channel *chn = lookUpChannel(name);
+			if (!chn)
+				return Message(403).addParam(name).addParam(":No such channel");
+			// if (chn->isSecret && !chn->isMember(usr))
+			// 	continue;
+			Message res = Message(353).addParam(chn->isPrivate      ? "*"
+													: chn->isSecret ? "@"
+																	: "=");
+			for (std::vector<Channel::ChannelMember>::const_iterator it =
+					 chn->members.begin();
+				 it != chn->members.end();
+				 it++)
+				res.addParam(it->usr.nickname);
+			const std::string str = res.totxt();
+			Send(res, usr);
+		}
 	}
 	return Message(366).addParam(req.params[0]).addParam(":End of /NAMES list");
 }
@@ -86,28 +95,37 @@ Message Server::list(User &usr, const Message &req)
 		return Message(464).addParam(":Password incorrect");
 	if (!usr.isRegistered())
 		return Message(451).addParam(":You have not registered");
-	Send(Message(321).addParam("Channel").addParam(":Users  Name"), usr);
-	// if (req.params.size())
-	{
-		// std::istringstream chnls(req.params[0]);
-		std::string name;
-		// while (getline(chnls, name, ','))
+	Send(Message(321).addParam("Channel").addParam(":Users Name"), usr);
+	if (req.params.empty())
 		for (std::vector<Channel>::iterator chn = channels.begin();
 			 chn != channels.end();
 			 chn++)
 		{
-			// Channel *chn = lookUpChannel(name);
-			// if (chn && chn->isMember(&usr))
-			{
+			if (!chn->isSecret)
 				Send(Message(322)
 						 .addParam(chn->name)
 						 .addParam(std::to_string(chn->members.size()))
 						 .addParam(chn->topic),
 					 usr);
-			}
+		}
+	else
+	{
+		std::istringstream chnls(req.params[0]);
+		std::string name;
+		while (getline(chnls, name, ','))
+		{
+			Channel *chn = lookUpChannel(name);
+			if (!chn)
+				Send(Message(403).addParam(name).addParam(":No such channel"),
+					 usr);
+			else if (!chn->isSecret)
+				Send(Message(322)
+						 .addParam(chn->name)
+						 .addParam(std::to_string(chn->members.size()))
+						 .addParam(chn->topic),
+					 usr);
 		}
 	}
-	(void)req;
 	return Message(323).addParam(":End of /LIST");
 }
 
@@ -248,6 +266,7 @@ Message Server::quit(User &usr, const Message &req)
 		if (chn->isMember(usr))
 			chn->broadcast(txt, usr);
 	users.erase(usr.fd);
+	std::cout << "A connection has been closed" << std::endl;
 	return Message();
 }
 
@@ -260,7 +279,8 @@ Message Server::pass(User &usr, const Message &req)
 	if (password != req.params[0])
 		return Message(464).addParam(":Password incorrect");
 	usr.hasSecret = true;
-	return Message().setCommand("REPLY").addParam(":Your password is set up");
+	return Message().setCommand("REPLY").addParam(
+		":Your password has been changed");
 }
 
 Message Server::user(User &usr, const Message &req)
@@ -365,7 +385,8 @@ Message Server::join(User &usr, const Message &req)
 		int _isKey = 0;
 		if (req.params.size() > 1)
 			_isKey = std::getline(_ss2, _key, ',') ? 1 : 0;
-
+		if (!Channel::isValidName(_ch))
+			Send(Message(476).addParam(_ch).addParam(":Bad Channel Mask"), usr);
 		std::vector<Channel>::iterator channelIterator =
 			std::find(channels.begin(), channels.end(), _ch);
 		int status = 0;
@@ -416,7 +437,8 @@ Message Server::join(User &usr, const Message &req)
 		}
 		case 4: // already in channel
 		{
-			Send(Message().setCommand("ERROR").addParam(":is already on channel"),
+			Send(Message(400).addParam("JOIN").addParam(
+					 ":you're already on channel"),
 				 usr);
 			break;
 		}

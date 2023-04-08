@@ -1,4 +1,5 @@
 #include "ircserv.hpp"
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -134,44 +135,48 @@ void Server::receive(std::vector<pollfd>::const_iterator &con)
 	User &usr = users.at(con->fd);
 	if (nbytes <= 0)
 	{
-		std::cout << "A connection must be closed" << std::endl;
 		if (nbytes == -1)
 			BlockingError("recv");
 		quit(usr, QUIT(usr));
 		cons.erase(con);
-		std::cout << "A connection has been closed" << std::endl;
 	}
-	else if (usr.buf.size() + nbytes >= 512)
+	else if (usr.buf.size() + nbytes > 512)
 	{
-		std::cerr << "Message is too large" << std::endl;
 		usr.buf.clear();
+		Send(Message(417).addParam(":Input line was too long"), usr);
 	}
-	else if (usr.buf.append(buf),
-			 usr.buf.size() >= 2 &&
-				 !usr.buf.compare(usr.buf.size() - 2, 2, "\r\n"))
-	{
-		std::cout << "Complete message => " << '"';
-		std::cout.write(usr.buf.data(), usr.buf.size() - 2);
-		std::cout << '"' << std::endl;
-		try
+	else if (usr.buf.append(buf), usr.buf.size() >= 2)
+		while (true)
 		{
-			const Message req = Message(usr.buf).setPrefix(usr);
-			std::cout << "[prefix]: " << req.prefix << std::endl;
-			std::cout << "[command]: " << req.command << std::endl;
-			for (unsigned i = 0; i < req.params.size(); i++)
-				std::cout << "[param]: " << req.params[i] << std::endl;
-			req.command == "QUIT" ? (quit(usr, req), (void)cons.erase(con))
-								  : process(usr, req);
+			size_t end = usr.buf.find("\r\n");
+			if (end == std::string::npos)
+			{
+				if (!usr.buf.empty())
+					std::cout << "[incomplete message] => " << '"' << usr.buf
+							  << '"' << std::endl;
+				break;
+			}
+			std::string rest(usr.buf.begin() + end + 2,
+							 usr.buf.begin() + usr.buf.size());
+			usr.buf.resize(end);
+			std::cout << "[complete message] => " << '"' << usr.buf << '"'
+					  << std::endl;
+			try
+			{
+				const Message req = Message(usr.buf).setPrefix(usr);
+				std::cout << "[prefix]: " << req.prefix << std::endl;
+				std::cout << "[command]: " << req.command << std::endl;
+				for (unsigned i = 0; i < req.params.size(); i++)
+					std::cout << "[param]: " << req.params[i] << std::endl;
+				req.command == "QUIT" ? (quit(usr, req), (void)cons.erase(con))
+									  : process(usr, req);
+			}
+			catch (const char *err)
+			{
+				std::cerr << "Message parsing error: " << err << std::endl;
+			}
+			usr.buf = rest;
 		}
-		catch (const char *err)
-		{
-			std::cerr << "Message parsing error: " << err << std::endl;
-		}
-		usr.buf.clear();
-	}
-	else
-		std::cout << "Incomplete message, waiting for incoming data later"
-				  << std::endl;
 }
 
 void Server::eventloop()
