@@ -77,12 +77,6 @@ class User
 class Channel
 {
 	friend class Server;
-	bool hasExternalMessages;
-	bool hasProtectedTopic;
-	bool isInviteOnly;
-	bool isModerated;
-	bool isPrivate;
-	bool isSecret;
 	const std::string name;
 	size_t limit;
 	size_t max_members;
@@ -109,6 +103,30 @@ class Channel
 	static unsigned FlagToMask[CHAR_MAX];
 
   private:
+	bool hasExternalMessages() const
+	{
+		return modes & ExternalMessagesMask;
+	}
+	bool hasProtectedTopic() const
+	{
+		return modes & ProtectedTopicMask;
+	}
+	bool isInviteOnly() const
+	{
+		return modes & InviteOnlyMask;
+	}
+	bool isModerated() const
+	{
+		return modes & ModeratedMask;
+	}
+	bool isPrivate() const
+	{
+		return modes & PrivateMask;
+	}
+	bool isSecret() const
+	{
+		return modes & SecretMask;
+	}
 	friend bool operator==(const ChannelMember &mem, const std::string &nickname)
 	{
 		return mem.usr.nickname == nickname;
@@ -128,9 +146,7 @@ class Channel
 
   public:
 	Channel(const std::string &name, User &usr, std::string key = std::string())
-		: hasExternalMessages(false), hasProtectedTopic(true),
-		  isInviteOnly(false), isModerated(false), isPrivate(false),
-		  isSecret(false), name(name), limit(100), key(key), modes(0)
+		: name(name), limit(100), key(key), modes(ProtectedTopicMask)
 	{
 		ChannelMember newMember(usr);
 		newMember.is_oper = true;
@@ -145,7 +161,7 @@ class Channel
 			std::cout << "User is already a member" << std::endl;
 			return (4);
 		}
-		if (isInviteOnly &&
+		if (isInviteOnly() &&
 			std::find(invited.begin(), invited.end(), &usr) == invited.end())
 			return (1);
 		if (!key.empty() && key != _key)
@@ -351,13 +367,13 @@ class Server
 	}
 	void sendChannelMemberList(const Channel *chn, User &usr)
 	{
-		if ((!chn->isPrivate && !chn->isSecret) ||
-			(chn->isPrivate && chn->isMember(usr)))
+		if ((!chn->isPrivate() && !chn->isSecret()) ||
+			(chn->isPrivate() && chn->isMember(usr)))
 		{
 			Message res = Message(353)
-							  .addParam(chn->isPrivate      ? "*"
-											: chn->isSecret ? "@"
-															: "=")
+							  .addParam(chn->isPrivate()      ? "*"
+											: chn->isSecret() ? "@"
+															  : "=")
 							  .addParam(chn->name);
 			for (std::vector<Channel::ChannelMember>::const_iterator it =
 					 chn->members.begin();

@@ -18,7 +18,7 @@ Message Server::topic(User &usr, const Message &req)
 	Channel *chn = lookUpChannel(req.params[0]);
 	if (!chn)
 		return Message(403).addParam(req.params[0]).addParam(":No such channel");
-	if (chn->hasProtectedTopic && !chn->isOperator(usr))
+	if (chn->hasProtectedTopic() && !chn->isOperator(usr))
 		return Message(482)
 			.addParam(req.params[0])
 			.addParam(":You're not channel operator");
@@ -56,8 +56,7 @@ Message Server::kick(User &usr, const Message &req)
 			.addParam(req.params[1])
 			.addParam(req.params[0])
 			.addParam(":They aren't on that channel");
-	chn->remove(mem);
-	return Message();
+	return chn->remove(mem), Message();
 }
 
 Message Server::names(User &usr, const Message &req)
@@ -67,12 +66,10 @@ Message Server::names(User &usr, const Message &req)
 	if (!usr.isRegistered())
 		return Message(451).addParam(":You have not registered");
 	if (req.params.empty())
-	{
 		for (std::vector<Channel>::iterator chn = channels.begin();
 			 chn != channels.end();
 			 chn++)
 			sendChannelMemberList(&*chn, usr);
-	}
 	else
 	{
 		std::istringstream chnls(req.params[0]);
@@ -82,8 +79,8 @@ Message Server::names(User &usr, const Message &req)
 			Channel *chn = lookUpChannel(name);
 			if (!chn)
 				return Message(403).addParam(name).addParam(":No such channel");
-			if ((!chn->isPrivate && !chn->isSecret) ||
-				(chn->isPrivate && chn->isMember(usr)))
+			if ((!chn->isPrivate() && !chn->isSecret()) ||
+				(chn->isPrivate() && chn->isMember(usr)))
 				sendChannelMemberList(chn, usr);
 		}
 	}
@@ -117,8 +114,8 @@ Message Server::list(User &usr, const Message &req)
 			 chn != channels.end();
 			 chn++)
 		{
-			if ((!chn->isPrivate && !chn->isSecret) ||
-				(chn->isPrivate && chn->isMember(usr)))
+			if ((!chn->isPrivate() && !chn->isSecret()) ||
+				(chn->isPrivate() && chn->isMember(usr)))
 				Send(Message(322)
 						 .addParam(chn->name)
 						 .addParam(std::to_string(chn->members.size()))
@@ -135,8 +132,8 @@ Message Server::list(User &usr, const Message &req)
 			if (!chn)
 				Send(Message(403).addParam(name).addParam(":No such channel"),
 					 usr);
-			else if ((!chn->isPrivate && !chn->isSecret) ||
-					 (chn->isPrivate && chn->isMember(usr)))
+			else if ((!chn->isPrivate() && !chn->isSecret()) ||
+					 (chn->isPrivate() && chn->isMember(usr)))
 				Send(Message(322)
 						 .addParam(chn->name)
 						 .addParam(std::to_string(chn->members.size()))
@@ -196,17 +193,17 @@ Message Server::mode(User &usr, const Message &req)
 		return Message(501).addParam(":Unknown MODE flag");
 	const int flag = Channel::FlagToMask[(int)req.params[1][1]];
 	const bool set = req.params[1][0] == '+';
-	if ((flag & PrivateMask && chn->isSecret) ||
-		(flag & SecretMask && chn->isPrivate))
+	if ((flag & PrivateMask && chn->isSecret()) ||
+		(flag & SecretMask && chn->isPrivate()))
 		return Message();
 	if (flag >= SecretKeyMask && flag <= OperatorMask && req.params.size() != 3)
 		return Message(461).addParam("MODE").addParam(":Not enough parameters");
 	Message res = flag & SecretKeyMask ? chn->setSecret(req.params[2], set)
 		: flag & SpeakerMask           ? chn->setSpeaker(req.params[2], set)
 		: flag & BanMask               ? chn->setBanMask(req.params[2], set)
-		: flag & ChannelLimitMask      ? chn->setChannelLimit(req.params[2], set)
-		: flag & OperatorMask          ? chn->setSecret(req.params[2], set)
-									   : Message();
+		: flag & ChannelLimitMask ? chn->setChannelLimit(req.params[2], set)
+		: flag & OperatorMask     ? chn->setSecret(req.params[2], set)
+								  : Message();
 	return set ? chn->modes |= flag : chn->modes &= ~flag, res;
 }
 
@@ -332,8 +329,7 @@ Message Server::privmsg(User &usr, const Message &req)
 			else
 			{
 				users.push_back(user);
-				for (unsigned rec = 0; rec < users.size(); rec++)
-					Send(req, *users[rec]);
+				Send(req, *user);
 			}
 		}
 		else if (Channel *chn = lookUpChannel(name))
