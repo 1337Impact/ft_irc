@@ -11,23 +11,19 @@ Message &Message::setCommand(const std::string &cmd)
 Message::Message(std::string &msg)
 {
 	size_t i = 0;
-
-	// handling prefix
 	for (; msg[i] == ' ' && i < msg.size(); i++)
-		; // temporary
+		;
 	if (msg[i] == ':')
 		for (; msg[i] != ' ' && i < msg.size(); i++)
 			;
 	for (; msg[i] == ' ' && i < msg.size(); i++)
 		;
-	// command
 	for (; msg[i] != ' ' && i < msg.size(); i++)
 	{
 		if (!isalpha(msg[i]))
-			throw "command parsing error"; // waiting for handle
+			throw "command parsing error";
 		command += msg[i];
 	}
-	// handle params
 	while (i < msg.size())
 	{
 		for (; msg[i] == ' ' && i < msg.size(); i++)

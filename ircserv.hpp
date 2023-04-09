@@ -43,8 +43,8 @@ class User
 {
 	bool hasSecret;
 	const int fd;
+	size_t nchannels;
 	std::string buf;
-	bool is_oper;
 	std::string hostname;
 	std::string nickname;
 	std::string realname;
@@ -89,6 +89,11 @@ class Channel
 	};
 	std::vector<ChannelMember> members;
 
+	friend bool operator==(const ChannelMember &mem, const std::string &nickname)
+	{
+		return mem.usr.nickname == nickname;
+	}
+
 	friend bool operator==(const ChannelMember &mem, const User &user)
 	{
 		return mem.usr.nickname == user.nickname;
@@ -109,6 +114,7 @@ class Channel
 	{
 		ChannelMember newMember(usr);
 		newMember.is_oper = true;
+		usr.nchannels++;
 		members.push_back(newMember);
 	}
 
@@ -128,6 +134,7 @@ class Channel
 			return (3);
 		else
 		{
+			usr.nchannels++;
 			members.push_back(ChannelMember(usr));
 			std::vector<User *>::iterator kicked =
 				find(invited.begin(), invited.end(), &usr);
@@ -183,6 +190,7 @@ class Channel
 	void remove(User *user)
 	{
 		members.erase(std::find(members.begin(), members.end(), *user));
+		user->nchannels--;
 	}
 	std::string getChannelModes() const
 	{
@@ -202,12 +210,16 @@ class Channel
 
 	const Message addOperator(const std::string &target, const bool add)
 	{
-		User *mem = lookUpUser(target);
-		if (!mem)
+		std::vector<ChannelMember>::iterator mem =
+			find(members.begin(), members.end(), target);
+		if (mem == members.end())
 			return Message(441).addParam(target).addParam(name).addParam(
 				":They aren't on that channel");
-		(void)add;
-		return Message().setCommand("REPLY").addParam(":Operator has been added");
+		std::cout << "param == " << add << std::endl;
+		mem->is_oper = add;
+		return add
+			? Message().setCommand("REPLY").addParam(":Operator has been added")
+			: Message().setCommand("REPLY").addParam(":Operator has been removed");
 	}
 
 	const Message setChannelLimit(const std::string &limit)

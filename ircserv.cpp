@@ -8,7 +8,7 @@
 #include <strings.h>
 #include <unistd.h>
 
-User::User(const int fd) : hasSecret(false), fd(fd)
+User::User(const int fd) : hasSecret(false), fd(fd), nchannels(0)
 {
 }
 
@@ -67,38 +67,37 @@ Server &Server::getInstance(const int port, const std::string &pass)
 
 void Server::process(User &usr, const Message &req)
 {
-	Message res;
 	if (req.command == "PASS")
-		res = pass(usr, req);
+		Send(pass(usr, req), usr);
 	else if (req.command == "USER")
-		res = user(usr, req);
+		Send(user(usr, req), usr);
 	else if (req.command == "NICK")
-		res = nick(usr, req);
+		Send(nick(usr, req), usr);
 	else if (req.command == "PRIVMSG")
-		res = privmsg(usr, req);
+		Send(privmsg(usr, req), usr);
 	else if (req.command == "NOTICE")
-		res = notice(usr, req);
+		Send(notice(usr, req), usr);
 	else if (req.command == "JOIN")
-		res = join(usr, req);
+		Send(join(usr, req), usr);
 	else if (req.command == "MODE")
-		res = mode(usr, req);
+		Send(mode(usr, req), usr);
 	else if (req.command == "INVITE")
-		res = invite(usr, req);
+		Send(invite(usr, req), usr);
 	else if (req.command == "KICK")
-		res = kick(usr, req);
+		Send(kick(usr, req), usr);
 	else if (req.command == "LIST")
-		res = list(usr, req);
+		Send(list(usr, req), usr);
 	else if (req.command == "NAMES")
-		res = names(usr, req);
+		Send(names(usr, req), usr);
 	else if (req.command == "PART")
-		res = part(usr, req);
+		Send(part(usr, req), usr);
 	else if (req.command == "QUIT")
-		res = quit(usr, req);
+		Send(quit(usr, req), usr);
 	else if (req.command == "TOPIC")
-		res = topic(usr, req);
+		Send(topic(usr, req), usr);
 	else if (!req.command.empty())
-		res = Message(421).addParam(req.command).addParam(":Unknown command");
-	Send(res, usr);
+		Send(Message(421).addParam(req.command).addParam(":Unknown command"),
+			 usr);
 }
 
 Server::~Server()

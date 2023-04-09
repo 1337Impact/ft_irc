@@ -16,6 +16,10 @@ Message Server::topic(User &usr, const Message &req)
 	Channel *chn = lookUpChannel(req.params[0]);
 	if (!chn)
 		return Message(403).addParam(req.params[0]).addParam(":No such channel");
+	if (chn->hasProtectedTopic && !chn->isOperator(usr))
+		return Message(482)
+			.addParam(req.params[0])
+			.addParam(":You're not channel operator");
 	if (req.params.size() == 2)
 		chn->topic = req.params[1];
 	if (!chn->topic.empty())
@@ -62,13 +66,36 @@ Message Server::names(User &usr, const Message &req)
 		return Message(451).addParam(":You have not registered");
 	if (req.params.empty())
 	{
+		for (std::vector<Channel>::iterator chn = channels.begin();
+			 chn != channels.end();
+			 chn++)
+			if ((!chn->isPrivate && !chn->isSecret) ||
+				(chn->isPrivate && chn->isMember(usr)))
+			{
+				Message res = Message(353)
+								  .addParam(chn->isPrivate      ? "*"
+												: chn->isSecret ? "@"
+																: "=")
+								  .addParam(chn->name);
+				for (std::vector<Channel::ChannelMember>::const_iterator it =
+						 chn->members.begin();
+					 it != chn->members.end();
+					 it++)
+					res.params.size() == 2 ? res.addParam(':' + it->usr.nickname)
+										   : res.addParam(it->usr.nickname);
+				const std::string str = res.totxt();
+				Send(res, usr);
+			}
 		Message res(353);
-		for (std::map<const int, User>::iterator clt = users.begin();
-			 clt != users.end();
-			 clt++)
-			res.params.empty() ? res.addParam(':' + clt->second.nickname)
-							   : res.addParam(clt->second.nickname);
-		Send(res, usr);
+		res.addParam("*");
+		for (std::map<const int, User>::iterator usr = users.begin();
+			 usr != users.end();
+			 usr++)
+			if (usr->second.isRegistered() && !usr->second.nchannels)
+				res.params.size() == 1 ? res.addParam(':' + usr->second.nickname)
+									   : res.addParam(usr->second.nickname);
+		if (res.params.size() > 1)
+			Send(res, usr);
 	}
 	else
 	{
@@ -79,19 +106,23 @@ Message Server::names(User &usr, const Message &req)
 			Channel *chn = lookUpChannel(name);
 			if (!chn)
 				return Message(403).addParam(name).addParam(":No such channel");
-			Message res = Message(353)
-							  .addParam(chn->isPrivate      ? "*"
-											: chn->isSecret ? "@"
-															: "=")
-							  .addParam(chn->name);
-			for (std::vector<Channel::ChannelMember>::const_iterator it =
-					 chn->members.begin();
-				 it != chn->members.end();
-				 it++)
-				res.params.size() == 2 ? res.addParam(':' + it->usr.nickname)
-									   : res.addParam(it->usr.nickname);
-			const std::string str = res.totxt();
-			Send(res, usr);
+			if ((!chn->isPrivate && !chn->isSecret) ||
+				(chn->isPrivate && chn->isMember(usr)))
+			{
+				Message res = Message(353)
+								  .addParam(chn->isPrivate      ? "*"
+												: chn->isSecret ? "@"
+																: "=")
+								  .addParam(chn->name);
+				for (std::vector<Channel::ChannelMember>::const_iterator it =
+						 chn->members.begin();
+					 it != chn->members.end();
+					 it++)
+					res.params.size() == 2 ? res.addParam(':' + it->usr.nickname)
+										   : res.addParam(it->usr.nickname);
+				const std::string str = res.totxt();
+				Send(res, usr);
+			}
 		}
 	}
 	return req.params.empty()
@@ -111,7 +142,8 @@ Message Server::list(User &usr, const Message &req)
 			 chn != channels.end();
 			 chn++)
 		{
-			if (!chn->isSecret)
+			if ((!chn->isPrivate && !chn->isSecret) ||
+				(chn->isPrivate && chn->isMember(usr)))
 				Send(Message(322)
 						 .addParam(chn->name)
 						 .addParam(std::to_string(chn->members.size()))
@@ -128,7 +160,8 @@ Message Server::list(User &usr, const Message &req)
 			if (!chn)
 				Send(Message(403).addParam(name).addParam(":No such channel"),
 					 usr);
-			else if (!chn->isSecret)
+			else if ((!chn->isPrivate && !chn->isSecret) ||
+					 (chn->isPrivate && chn->isMember(usr)))
 				Send(Message(322)
 						 .addParam(chn->name)
 						 .addParam(std::to_string(chn->members.size()))
@@ -394,20 +427,14 @@ Message Server::join(User &usr, const Message &req)
 	if (!usr.isRegistered())
 		return Message(451).addParam(":You have not registered");
 	if (req.params.size() < 1)
-		return Message(461).addParam("JOIN").addParam(
-			":Not enough parameters"); // ERR_NEEDMOREPARAMS
-	std::stringstream _ss(req.params[0]);
-	std::stringstream _ss2;
+		return Message(461).addParam("JOIN").addParam(":Not enough parameters");
+	std::stringstream _ss(req.params[0]), _ss2;
 	if (req.params.size() > 1)
 		_ss2 << req.params[1];
-	std::string _ch;
-	std::string _key;
-
+	std::string _ch, _key;
 	while (std::getline(_ss, _ch, ','))
 	{
-		int _isKey = 0;
-		if (req.params.size() > 1)
-			_isKey = std::getline(_ss2, _key, ',') ? 1 : 0;
+		int _isKey = req.params.size() > 1 ? !!std::getline(_ss2, _key, ',') : 0;
 		if (!Channel::isValidName(_ch))
 			Send(Message(476).addParam(_ch).addParam(":Bad Channel Mask"), usr);
 		std::vector<Channel>::iterator channelIterator =
@@ -415,8 +442,7 @@ Message Server::join(User &usr, const Message &req)
 		int status = 0;
 		if (channelIterator == channels.end())
 		{
-			Channel newChannel(
-				_ch, usr, (_isKey ? _key : "")); // create new channel
+			Channel newChannel(_ch, usr, (_isKey ? _key : ""));
 			channels.push_back(newChannel);
 			channelIterator = channels.end() - 1;
 			std::cout << "channel has been created\n";
@@ -429,42 +455,30 @@ Message Server::join(User &usr, const Message &req)
 		switch (status)
 		{
 		case 0:
-		{
+			Send(Message().setPrefix(usr).setCommand("JOIN").addParam(_ch), usr);
 			channelIterator->broadcast(
 				Message().setPrefix(usr).setCommand("JOIN").addParam(_ch).totxt(),
 				usr);
-			Send(Message().setPrefix(usr).setCommand("JOIN").addParam(_ch), usr);
 			Send(topic(usr, Message().setCommand("TOPIC").addParam(_ch)), usr);
-			Send(names(usr, Message().setCommand("TOPIC").addParam(_ch)), usr);
+			Send(names(usr, Message().setCommand("NAMES").addParam(_ch)), usr);
 			break;
-		}
-		case 1: // invite only error
-		{
-			Send(Message(473) // ERR_INVITEONLYCHAN
-					 .addParam(_ch)
-					 .addParam(":Cannot join channel (+i)"),
+		case 1:
+			Send(Message(473).addParam(_ch).addParam(":Cannot join channel (+i)"),
 				 usr);
 			break;
-		}
-		case 2: // wrong key
-		{
+		case 2:
 			Send(Message(475).addParam(_ch).addParam(":Cannot join channel (+k)"),
 				 usr);
 			break;
-		}
-		case 3: // channel is full
-		{
+		case 3:
 			Send(Message(471).addParam(_ch).addParam(":Cannot join channel (+l)"),
 				 usr);
 			break;
-		}
-		case 4: // already in channel
-		{
+		case 4:
 			Send(Message(400).addParam("JOIN").addParam(
 					 ":you're already on channel"),
 				 usr);
 			break;
-		}
 		}
 	}
 	return Message();
