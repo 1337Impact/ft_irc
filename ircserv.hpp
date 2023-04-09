@@ -1,17 +1,11 @@
 #ifndef IRCSERV_HPP
 #define IRCSERV_HPP
-
-#include <climits>
 #include <iostream>
 #include <map>
 #include <netinet/in.h>
 #include <set>
-#include <sstream>
-#include <string>
-#include <sys/_types/_size_t.h>
 #include <sys/poll.h>
 #include <vector>
-// #include <limits>
 
 #define BlockingError(func) \
 	std::cerr << func << ": " << strerror(EWOULDBLOCK) << std::endl
@@ -77,16 +71,17 @@ class User
 class Channel
 {
 	friend class Server;
+
 	const std::string name;
+	int modes;
 	size_t limit;
 	size_t max_members;
-	std::vector<std::string> banMasks;
-	std::vector<User *> invited;
 	std::set<User *> speakers;
 	std::string chTopic;
 	std::string key;
 	std::string topic;
-	int modes;
+	std::vector<std::string> banMasks;
+	std::vector<User *> invited;
 
 	struct ChannelMember
 	{
@@ -142,19 +137,16 @@ class Channel
 		return name == chn.name;
 	}
 
-	friend class Server;
-
   public:
 	Channel(const std::string &name, User &usr, std::string key = std::string())
-		: name(name), limit(100), key(key),
-		  modes(ProtectedTopicMask | NoExternalMessagesMask)
+		: name(name), modes(ProtectedTopicMask | NoExternalMessagesMask),
+		  limit(100), key(key)
 	{
 		ChannelMember newMember(usr);
 		newMember.is_oper = true;
 		usr.nchannels++;
 		members.push_back(newMember);
 	}
-
 	int join(User &usr, std::string _key)
 	{
 		if (this->isMember(usr))
@@ -180,16 +172,15 @@ class Channel
 			return (0);
 		}
 	}
-
-	void broadcast(const std::string &res, const User &skip) const
+	const Channel &broadcast(const std::string &res, const User &skip) const
 	{
 		std::vector<ChannelMember>::const_iterator it;
 		for (it = members.begin(); it != members.end(); it++)
 			if (skip.nickname != (*it).usr.nickname)
 				if (send(it->usr.fd, res.data(), res.size(), 0) == -1)
 					BlockingError("send");
+		return *this;
 	}
-
 	std::string get_memebers(void)
 	{
 		std::string membersList;
@@ -203,7 +194,6 @@ class Channel
 		}
 		return (membersList);
 	}
-
 	User *lookUpUser(const std::string &nick)
 	{
 		for (std::vector<ChannelMember>::iterator it = members.begin();
@@ -233,7 +223,6 @@ class Channel
 		std::string modes;
 		return modes;
 	}
-
 	bool isOperator(const User &usr) const
 	{
 		for (std::vector<ChannelMember>::const_iterator it = members.begin();
@@ -243,12 +232,10 @@ class Channel
 				return it->is_oper;
 		return false;
 	}
-
 	bool isSpeaker(const User &user) const
 	{
 		return speakers.end() != find(speakers.begin(), speakers.end(), &user);
 	}
-
 	const Message addOperator(const std::string &target, const bool add)
 	{
 		std::vector<ChannelMember>::iterator mem =
@@ -262,7 +249,6 @@ class Channel
 			? Message().setCommand("REPLY").addParam(":Operator has been added")
 			: Message().setCommand("REPLY").addParam(":Operator has been removed");
 	}
-
 	const Message setChannelLimit(const std::string &limit, const bool add)
 	{
 		ssize_t val = atoi(limit.data());
@@ -282,7 +268,6 @@ class Channel
 			.addParam(":Limit has been set to")
 			.addParam(limit);
 	}
-
 	const Message setBanMask(const std::string &mask, const bool add)
 	{
 		return add ? banMasks.push_back(mask)
@@ -332,30 +317,27 @@ class Server
 	const int tcpsock;
 	const std::string password;
 	sockaddr_in serv;
-	std::vector<Channel> channels;
 	std::map<const int, User> users;
+	std::vector<Channel> channels;
 	std::vector<pollfd> cons;
 
 	~Server();
 	bool nickIsUsed(const std::string &nick) const;
-	Message pass(User &usr, const Message &req);
-	Message user(User &usr, const Message &req);
-	Message nick(User &usr, const Message &req);
-	Message privmsg(User &usr, const Message &req);
-	Message notice(User &usr, const Message &req);
-	Message quit(User &usr, const Message &req);
-
-	Message join(User &usr, const Message &req);
-	Message list(User &usr, const Message &req);
-	Message kick(User &usr, const Message &req);
+	Channel *lookUpChannel(const std::string &chn);
 	Message invite(User &usr, const Message &req);
-
+	Message join(User &usr, const Message &req);
+	Message kick(User &usr, const Message &req);
+	Message list(User &usr, const Message &req);
 	Message mode(User &usr, const Message &req);
 	Message names(User &usr, const Message &req);
+	Message nick(User &usr, const Message &req);
+	Message notice(User &usr, const Message &req);
 	Message part(User &usr, const Message &req);
+	Message pass(User &usr, const Message &req);
+	Message privmsg(User &usr, const Message &req);
+	Message quit(User &usr, const Message &req);
 	Message topic(User &usr, const Message &req);
-
-	Channel *lookUpChannel(const std::string &chn, const User &seeker);
+	Message user(User &usr, const Message &req);
 	Server(const int port, const std::string &name);
 	User *lookUpUser(const std::string &nick);
 	void process(User &usr, const Message &req);

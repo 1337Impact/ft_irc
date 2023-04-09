@@ -1,11 +1,6 @@
 #include "ircserv.hpp"
-#include <algorithm>
 #include <sstream>
-#include <string>
-#include <strings.h>
-#include <sys/_types/_u_char.h>
 #include <unistd.h>
-#include <utility>
 
 Message Server::topic(User &usr, const Message &req)
 {
@@ -18,12 +13,14 @@ Message Server::topic(User &usr, const Message &req)
 	Channel *chn = lookUpChannel(req.params[0]);
 	if (!chn)
 		return Message(403).addParam(req.params[0]).addParam(":No such channel");
-	if (chn->hasProtectedTopic() && !chn->isOperator(usr))
-		return Message(482)
-			.addParam(req.params[0])
-			.addParam(":You're not channel operator");
 	if (req.params.size() == 2)
+	{
+		if (chn->hasProtectedTopic() && !chn->isOperator(usr))
+			return Message(482)
+				.addParam(req.params[0])
+				.addParam(":You're not channel operator");
 		chn->topic = req.params[1];
+	}
 	if (!chn->topic.empty())
 		return Message(332).addParam(req.params[0]).addParam(chn->topic);
 	return Message(331).addParam(req.params[0]).addParam(":No topic is set");
@@ -75,25 +72,21 @@ Message Server::names(User &usr, const Message &req)
 		std::istringstream chnls(req.params[0]);
 		std::string name;
 		while (getline(chnls, name, ','))
-		{
-			Channel *chn = lookUpChannel(name);
-			if (!chn)
+			if (Channel *chn = lookUpChannel(name))
+				sendChannelMemberList(chn, usr);
+			else
 				Send(Message(403).addParam(name).addParam(":No such channel"),
 					 usr);
-			if ((!chn->isPrivate() && !chn->isSecret()) ||
-				(chn->isPrivate() && chn->isMember(usr)))
-				sendChannelMemberList(chn, usr);
-		}
 	}
 	if (req.params.empty())
 	{
 		Message res(353);
-		res.addParam("*");
+		res.addParam("=").addParam("*");
 		for (std::map<const int, User>::iterator usr = users.begin();
 			 usr != users.end();
 			 usr++)
 			if (usr->second.isRegistered() && !usr->second.nchannels)
-				res.params.size() == 1 ? res.addParam(':' + usr->second.nickname)
+				res.params.size() == 2 ? res.addParam(':' + usr->second.nickname)
 									   : res.addParam(usr->second.nickname);
 		if (res.params.size() > 1)
 			Send(res, usr);
@@ -221,14 +214,13 @@ Message Server::part(User &usr, const Message &req)
 		if (Channel *channel = lookUpChannel(name))
 			if (channel->isMember(usr))
 			{
-				std::cout << usr.nickname << " wants to leave" << std::endl;
-				channel->remove(&usr);
 				channel->broadcast(Message()
 									   .setPrefix(usr)
 									   .setCommand("PART")
 									   .addParam(channel->name)
 									   .totxt(),
 								   usr);
+				channel->remove(&usr);
 			}
 			else
 				Send(Message(442).addParam(name).addParam(
@@ -244,11 +236,15 @@ Message Server::quit(User &usr, const Message &req)
 {
 	const std::string txt = req.totxt();
 	Close(usr.fd);
-	for (std::vector<Channel>::const_iterator chn = channels.begin();
+	for (std::vector<Channel>::iterator chn = channels.begin();
 		 chn != channels.end();
 		 chn++)
 		if (chn->isMember(usr))
+		{
 			chn->broadcast(txt, usr);
+			chn->members.erase(
+				find(chn->members.begin(), chn->members.end(), usr));
+		}
 	users.erase(usr.fd);
 	std::cout << "A connection has been closed" << std::endl;
 	return Message();
@@ -332,23 +328,26 @@ Message Server::privmsg(User &usr, const Message &req)
 				Send(req, *user);
 			}
 		}
-		else if (Channel *chn = lookUpChannel(name, usr))
+		else if (Channel *chn = lookUpChannel(name))
 		{
 			if (find(channels.begin(), channels.end(), chn) != channels.end())
 				Send(Message(407).addParam(name).addParam(
 						 ":Duplicate recipients. No message delivered"),
 					 usr);
-			else if ((chn->hasNoExternalMessages() && !chn->isMember(usr)) ||
-					 (chn->isModerated() && !chn->isSpeaker(usr) &&
-					  !chn->isOperator(usr)))
-				Send(Message(404).addParam(chn->name).addParam(
-						 ":Cannot send to channel"),
-					 usr);
+			else if (channels.push_back(chn),
+					 (chn->hasNoExternalMessages() && !chn->isMember(usr)) ||
+						 (chn->isModerated() && !chn->isSpeaker(usr) &&
+						  !chn->isOperator(usr)))
+				(chn->isSecret() || chn->isPrivate()) && !chn->isMember(usr) &&
+						!chn->isSpeaker(usr)
+					? Send(Message(401).addParam(name).addParam(
+							   ":No such nick/channel"),
+						   usr)
+					: Send(Message(404).addParam(name).addParam(
+							   ":Cannot send to channel"),
+						   usr);
 			else
-			{
-				channels.push_back(chn);
 				chn->broadcast(req.totxt(), usr);
-			}
 		}
 		else
 			Send(Message(401).addParam(name).addParam(":No such nick/channel"),

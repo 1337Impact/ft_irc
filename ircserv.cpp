@@ -1,11 +1,5 @@
 #include "ircserv.hpp"
-#include <algorithm>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <fcntl.h>
-#include <sstream>
-#include <strings.h>
 #include <unistd.h>
 
 unsigned Channel::FlagToMask[];
@@ -56,17 +50,13 @@ bool User::validNick(const std::string &nick)
 	return true;
 }
 
-Channel *Server::lookUpChannel(const std::string &name, const User &seeker)
+Channel *Server::lookUpChannel(const std::string &name)
 {
 	for (std::vector<Channel>::iterator chn = channels.begin();
 		 chn != channels.end();
 		 chn++)
 		if (name == chn->name)
-		{
-			if ((chn->isSecret() || chn->isPrivate()) && chn->isMember(seeker))
-				break;
 			return &*chn;
-		}
 	return (nullptr);
 }
 
