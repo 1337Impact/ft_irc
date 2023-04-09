@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
 		Channel::FlagToMask[(int)'k'] = SecretMask;
 		Channel::FlagToMask[(int)'l'] = ChannelLimitMask;
 		Channel::FlagToMask[(int)'m'] = ModeratedMask;
-		Channel::FlagToMask[(int)'n'] = ExternalMessagesMask;
+		Channel::FlagToMask[(int)'n'] = NoExternalMessagesMask;
 		Channel::FlagToMask[(int)'o'] = OperatorMask;
 		Channel::FlagToMask[(int)'p'] = PrivateMask;
 		Channel::FlagToMask[(int)'t'] = ProtectedTopicMask;
@@ -56,13 +56,17 @@ bool User::validNick(const std::string &nick)
 	return true;
 }
 
-Channel *Server::lookUpChannel(const std::string &name)
+Channel *Server::lookUpChannel(const std::string &name, const User &seeker)
 {
 	for (std::vector<Channel>::iterator chn = channels.begin();
 		 chn != channels.end();
 		 chn++)
 		if (name == chn->name)
+		{
+			if ((chn->isSecret() || chn->isPrivate()) && chn->isMember(seeker))
+				break;
 			return &*chn;
+		}
 	return (nullptr);
 }
 

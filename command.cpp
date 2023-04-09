@@ -78,7 +78,8 @@ Message Server::names(User &usr, const Message &req)
 		{
 			Channel *chn = lookUpChannel(name);
 			if (!chn)
-				return Message(403).addParam(name).addParam(":No such channel");
+				Send(Message(403).addParam(name).addParam(":No such channel"),
+					 usr);
 			if ((!chn->isPrivate() && !chn->isSecret()) ||
 				(chn->isPrivate() && chn->isMember(usr)))
 				sendChannelMemberList(chn, usr);
@@ -319,7 +320,6 @@ Message Server::privmsg(User &usr, const Message &req)
 	std::istringstream targets(req.params[0]);
 	std::string name;
 	while (getline(targets, name, ','))
-	{
 		if (User *user = lookUpUser(name))
 		{
 			if (find(users.begin(), users.end(), user) != users.end())
@@ -332,13 +332,15 @@ Message Server::privmsg(User &usr, const Message &req)
 				Send(req, *user);
 			}
 		}
-		else if (Channel *chn = lookUpChannel(name))
+		else if (Channel *chn = lookUpChannel(name, usr))
 		{
 			if (find(channels.begin(), channels.end(), chn) != channels.end())
 				Send(Message(407).addParam(name).addParam(
 						 ":Duplicate recipients. No message delivered"),
 					 usr);
-			else if (!chn->isMember(usr))
+			else if ((chn->hasNoExternalMessages() && !chn->isMember(usr)) ||
+					 (chn->isModerated() && !chn->isSpeaker(usr) &&
+					  !chn->isOperator(usr)))
 				Send(Message(404).addParam(chn->name).addParam(
 						 ":Cannot send to channel"),
 					 usr);
@@ -349,8 +351,8 @@ Message Server::privmsg(User &usr, const Message &req)
 			}
 		}
 		else
-			return Message(401).addParam(name).addParam(":No such nick/channel");
-	}
+			Send(Message(401).addParam(name).addParam(":No such nick/channel"),
+				 usr);
 	return Message();
 }
 
@@ -420,6 +422,5 @@ Message Server::join(User &usr, const Message &req)
 
 Message Server::notice(User &usr, const Message &req)
 {
-	// ERR_CANNOTSENDTOCHAN to check
 	return privmsg(usr, req), Message();
 }

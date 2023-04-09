@@ -24,7 +24,7 @@
 	Message().setPrefix(usr).setCommand("QUIT").addParam( \
 		":User quit unexpectedly")
 
-#define ExternalMessagesMask 1 << 0
+#define NoExternalMessagesMask 1 << 0
 #define InviteOnlyMask 1 << 1
 #define ModeratedMask 1 << 2
 #define PrivateMask 1 << 3
@@ -103,9 +103,9 @@ class Channel
 	static unsigned FlagToMask[CHAR_MAX];
 
   private:
-	bool hasExternalMessages() const
+	bool hasNoExternalMessages() const
 	{
-		return modes & ExternalMessagesMask;
+		return modes & NoExternalMessagesMask;
 	}
 	bool hasProtectedTopic() const
 	{
@@ -146,7 +146,8 @@ class Channel
 
   public:
 	Channel(const std::string &name, User &usr, std::string key = std::string())
-		: name(name), limit(100), key(key), modes(ProtectedTopicMask)
+		: name(name), limit(100), key(key),
+		  modes(ProtectedTopicMask | NoExternalMessagesMask)
 	{
 		ChannelMember newMember(usr);
 		newMember.is_oper = true;
@@ -213,7 +214,7 @@ class Channel
 		return (nullptr);
 	}
 
-	bool isMember(User &user) const
+	bool isMember(const User &user) const
 	{
 		for (std::vector<ChannelMember>::const_iterator it = members.begin();
 			 it != members.end();
@@ -222,7 +223,6 @@ class Channel
 				return true;
 		return false;
 	}
-	Channel(const std::string &name, User *usr);
 	void remove(User *user)
 	{
 		members.erase(std::find(members.begin(), members.end(), *user));
@@ -242,6 +242,11 @@ class Channel
 			if (usr.nickname == it->usr.nickname)
 				return it->is_oper;
 		return false;
+	}
+
+	bool isSpeaker(const User &user) const
+	{
+		return speakers.end() != find(speakers.begin(), speakers.end(), &user);
 	}
 
 	const Message addOperator(const std::string &target, const bool add)
@@ -350,7 +355,7 @@ class Server
 	Message part(User &usr, const Message &req);
 	Message topic(User &usr, const Message &req);
 
-	Channel *lookUpChannel(const std::string &chn);
+	Channel *lookUpChannel(const std::string &chn, const User &seeker);
 	Server(const int port, const std::string &name);
 	User *lookUpUser(const std::string &nick);
 	void process(User &usr, const Message &req);
