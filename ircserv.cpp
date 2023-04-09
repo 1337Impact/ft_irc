@@ -8,6 +8,33 @@
 #include <strings.h>
 #include <unistd.h>
 
+unsigned Channel::FlagToMask[];
+
+int main(int argc, char *argv[])
+{
+	try
+	{
+		Channel::FlagToMask[(int)'b'] = BanMask;
+		Channel::FlagToMask[(int)'i'] = InviteOnlyMask;
+		Channel::FlagToMask[(int)'k'] = SecretKeyMask;
+		Channel::FlagToMask[(int)'k'] = SecretMask;
+		Channel::FlagToMask[(int)'l'] = ChannelLimitMask;
+		Channel::FlagToMask[(int)'m'] = ModeratedMask;
+		Channel::FlagToMask[(int)'n'] = ExternalMessagesMask;
+		Channel::FlagToMask[(int)'o'] = OperatorMask;
+		Channel::FlagToMask[(int)'p'] = PrivateMask;
+		Channel::FlagToMask[(int)'t'] = ProtectedTopicMask;
+		Channel::FlagToMask[(int)'v'] = SpeakerMask;
+		if (argc != 3)
+			throw std::invalid_argument("usage: ./ircserv <port> <password>");
+		Server::getInstance(std::atoi(argv[1]), argv[2]).eventloop();
+	}
+	catch (const std::exception &exp)
+	{
+		std::cerr << exp.what() << std::endl;
+	}
+}
+
 User::User(const int fd) : hasSecret(false), fd(fd), nchannels(0)
 {
 }
@@ -209,19 +236,5 @@ void Server::eventloop()
 				evts--;
 				receive(con);
 			}
-	}
-}
-
-int main(int argc, char *argv[])
-{
-	try
-	{
-		if (argc != 3)
-			throw std::invalid_argument("usage: ./ircserv <port> <password>");
-		Server::getInstance(std::atoi(argv[1]), argv[2]).eventloop();
-	}
-	catch (const std::exception &exp)
-	{
-		std::cerr << exp.what() << std::endl;
 	}
 }

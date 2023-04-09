@@ -1,6 +1,7 @@
 #ifndef IRCSERV_HPP
 #define IRCSERV_HPP
 
+#include <climits>
 #include <iostream>
 #include <map>
 #include <netinet/in.h>
@@ -10,6 +11,7 @@
 #include <sys/_types/_size_t.h>
 #include <sys/poll.h>
 #include <vector>
+// #include <limits>
 
 #define BlockingError(func) \
 	std::cerr << func << ": " << strerror(EWOULDBLOCK) << std::endl
@@ -21,6 +23,19 @@
 #define QUIT(usr)                                         \
 	Message().setPrefix(usr).setCommand("QUIT").addParam( \
 		":User quit unexpectedly")
+
+#define ExternalMessagesMask 1 << 0
+#define InviteOnlyMask 1 << 1
+#define ModeratedMask 1 << 2
+#define PrivateMask 1 << 3
+#define ProtectedTopicMask 1 << 4
+#define SecretMask 1 << 5
+
+#define SecretKeyMask 1 << 6
+#define SpeakerMask 1 << 7
+#define BanMask 1 << 8
+#define ChannelLimitMask 1 << 9
+#define OperatorMask 1 << 10
 
 class User;
 struct Message
@@ -77,6 +92,7 @@ class Channel
 	std::string chTopic;
 	std::string key;
 	std::string topic;
+	int modes;
 
 	struct ChannelMember
 	{
@@ -89,6 +105,10 @@ class Channel
 	};
 	std::vector<ChannelMember> members;
 
+  public:
+	static unsigned FlagToMask[CHAR_MAX];
+
+  private:
 	friend bool operator==(const ChannelMember &mem, const std::string &nickname)
 	{
 		return mem.usr.nickname == nickname;
@@ -110,7 +130,7 @@ class Channel
 	Channel(const std::string &name, User &usr, std::string key = std::string())
 		: hasExternalMessages(false), hasProtectedTopic(true),
 		  isInviteOnly(false), isModerated(false), isPrivate(false),
-		  isSecret(false), name(name), limit(100), key(key)
+		  isSecret(false), name(name), limit(100), key(key), modes(0)
 	{
 		ChannelMember newMember(usr);
 		newMember.is_oper = true;
@@ -222,9 +242,15 @@ class Channel
 			: Message().setCommand("REPLY").addParam(":Operator has been removed");
 	}
 
-	const Message setChannelLimit(const std::string &limit)
+	const Message setChannelLimit(const std::string &limit, const bool add)
 	{
 		ssize_t val = atoi(limit.data());
+		if (!add)
+		{
+			this->limit = members.size();
+			return Message(696).addParam(name).addParam("l").addParam(
+				":limit has been removed");
+		}
 		if (val >= (ssize_t)members.size())
 			this->limit = val;
 		else
@@ -321,6 +347,25 @@ class Server
 			if (std::cout << "Sending: " << '"' << _tmp << '"' << std::endl,
 				send(usr.fd, _tmp.data(), _tmp.size(), 0) == -1)
 				BlockingError("send");
+		}
+	}
+	void sendChannelMemberList(const Channel *chn, User &usr)
+	{
+		if ((!chn->isPrivate && !chn->isSecret) ||
+			(chn->isPrivate && chn->isMember(usr)))
+		{
+			Message res = Message(353)
+							  .addParam(chn->isPrivate      ? "*"
+											: chn->isSecret ? "@"
+															: "=")
+							  .addParam(chn->name);
+			for (std::vector<Channel::ChannelMember>::const_iterator it =
+					 chn->members.begin();
+				 it != chn->members.end();
+				 it++)
+				res.params.size() == 2 ? res.addParam(':' + it->usr.nickname)
+									   : res.addParam(it->usr.nickname);
+			Send(res, usr);
 		}
 	}
 

@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <sstream>
 #include <string>
+#include <strings.h>
+#include <sys/_types/_u_char.h>
 #include <unistd.h>
 #include <utility>
 
@@ -69,33 +71,7 @@ Message Server::names(User &usr, const Message &req)
 		for (std::vector<Channel>::iterator chn = channels.begin();
 			 chn != channels.end();
 			 chn++)
-			if ((!chn->isPrivate && !chn->isSecret) ||
-				(chn->isPrivate && chn->isMember(usr)))
-			{
-				Message res = Message(353)
-								  .addParam(chn->isPrivate      ? "*"
-												: chn->isSecret ? "@"
-																: "=")
-								  .addParam(chn->name);
-				for (std::vector<Channel::ChannelMember>::const_iterator it =
-						 chn->members.begin();
-					 it != chn->members.end();
-					 it++)
-					res.params.size() == 2 ? res.addParam(':' + it->usr.nickname)
-										   : res.addParam(it->usr.nickname);
-				const std::string str = res.totxt();
-				Send(res, usr);
-			}
-		Message res(353);
-		res.addParam("*");
-		for (std::map<const int, User>::iterator usr = users.begin();
-			 usr != users.end();
-			 usr++)
-			if (usr->second.isRegistered() && !usr->second.nchannels)
-				res.params.size() == 1 ? res.addParam(':' + usr->second.nickname)
-									   : res.addParam(usr->second.nickname);
-		if (res.params.size() > 1)
-			Send(res, usr);
+			sendChannelMemberList(&*chn, usr);
 	}
 	else
 	{
@@ -108,22 +84,21 @@ Message Server::names(User &usr, const Message &req)
 				return Message(403).addParam(name).addParam(":No such channel");
 			if ((!chn->isPrivate && !chn->isSecret) ||
 				(chn->isPrivate && chn->isMember(usr)))
-			{
-				Message res = Message(353)
-								  .addParam(chn->isPrivate      ? "*"
-												: chn->isSecret ? "@"
-																: "=")
-								  .addParam(chn->name);
-				for (std::vector<Channel::ChannelMember>::const_iterator it =
-						 chn->members.begin();
-					 it != chn->members.end();
-					 it++)
-					res.params.size() == 2 ? res.addParam(':' + it->usr.nickname)
-										   : res.addParam(it->usr.nickname);
-				const std::string str = res.totxt();
-				Send(res, usr);
-			}
+				sendChannelMemberList(chn, usr);
 		}
+	}
+	if (req.params.empty())
+	{
+		Message res(353);
+		res.addParam("*");
+		for (std::map<const int, User>::iterator usr = users.begin();
+			 usr != users.end();
+			 usr++)
+			if (usr->second.isRegistered() && !usr->second.nchannels)
+				res.params.size() == 1 ? res.addParam(':' + usr->second.nickname)
+									   : res.addParam(usr->second.nickname);
+		if (res.params.size() > 1)
+			Send(res, usr);
 	}
 	return req.params.empty()
 		? Message(366).addParam(":End of /NAMES list")
@@ -216,58 +191,23 @@ Message Server::mode(User &usr, const Message &req)
 			":You're not channel operator");
 	if (req.params.empty())
 		return Message(324).addParam(chn->name).addParam(chn->getChannelModes());
-	if (req.params[1].size() <= 2 &&
-		(req.params[1][0] == '+' || req.params[1][0] == '-'))
-		switch (req.params[1][1])
-		{
-		case 'p':
-			if (!chn->isSecret)
-				chn->isPrivate = req.params[1][0] == '+';
-			return Message().setCommand("REPLY").addParam(
-				":Private flag has been set");
-		case 's':
-			if (!chn->isPrivate)
-				chn->isSecret = req.params[1][0] == '+';
-			return Message().setCommand("REPLY").addParam(
-				":Secret flag has been set");
-		case 'i':
-			return chn->isInviteOnly = req.params[1][0] == '+',
-				   Message().setCommand("REPLY").addParam(
-					   ":Invite flag has been set");
-		case 't':
-			return chn->hasProtectedTopic = req.params[1][0] == '+',
-				   Message().setCommand("REPLY").addParam(
-					   ":Protected topic has been set");
-		case 'n':
-			return chn->hasExternalMessages = req.params[1][0] == '+',
-				   Message().setCommand("REPLY").addParam(
-					   ":External messages has been set");
-		case 'm':
-			return chn->isModerated = req.params[1][0] == '+',
-				   Message().setCommand("REPLY").addParam(
-					   ":Moderated flag has been set");
-		case 'o':
-			return req.params.size() != 3
-				? Message(461).addParam("MODE").addParam(":Not enough parameters")
-				: chn->addOperator(req.params[2], req.params[1][0] == '+');
-		case 'l':
-			return req.params.size() != 3
-				? Message(461).addParam("MODE").addParam(":Not enough parameters")
-				: chn->setChannelLimit(req.params[2]);
-		case 'b':
-			return req.params.size() != 3
-				? Message(461).addParam("MODE").addParam(":Not enough parameters")
-				: chn->setBanMask(req.params[2], req.params[1][0] == '+');
-		case 'v':
-			return req.params.size() != 3
-				? Message(461).addParam("MODE").addParam(":Not enough parameters")
-				: chn->setSpeaker(req.params[2], req.params[1][0] == '+');
-		case 'k':
-			return req.params.size() != 3
-				? Message(461).addParam("MODE").addParam(":Not enough parameters")
-				: chn->setSecret(req.params[2], req.params[1][0] == '+');
-		}
-	return Message(501).addParam(":Unknown MODE flag");
+	if (!(req.params[1].size() <= 2) ||
+		(req.params[1][0] != '+' && req.params[1][0] != '-'))
+		return Message(501).addParam(":Unknown MODE flag");
+	const int flag = Channel::FlagToMask[(int)req.params[1][1]];
+	const bool set = req.params[1][0] == '+';
+	if ((flag & PrivateMask && chn->isSecret) ||
+		(flag & SecretMask && chn->isPrivate))
+		return Message();
+	if (flag >= SecretKeyMask && flag <= OperatorMask && req.params.size() != 3)
+		return Message(461).addParam("MODE").addParam(":Not enough parameters");
+	Message res = flag & SecretKeyMask ? chn->setSecret(req.params[2], set)
+		: flag & SpeakerMask           ? chn->setSpeaker(req.params[2], set)
+		: flag & BanMask               ? chn->setBanMask(req.params[2], set)
+		: flag & ChannelLimitMask      ? chn->setChannelLimit(req.params[2], set)
+		: flag & OperatorMask          ? chn->setSecret(req.params[2], set)
+									   : Message();
+	return set ? chn->modes |= flag : chn->modes &= ~flag, res;
 }
 
 Message Server::part(User &usr, const Message &req)
@@ -281,7 +221,6 @@ Message Server::part(User &usr, const Message &req)
 	while (getline(chnls, name, ','))
 	{
 		if (Channel *channel = lookUpChannel(name))
-		{
 			if (channel->isMember(usr))
 			{
 				std::cout << usr.nickname << " wants to leave" << std::endl;
@@ -297,7 +236,6 @@ Message Server::part(User &usr, const Message &req)
 				Send(Message(442).addParam(name).addParam(
 						 ":You're not on that channel"),
 					 usr);
-		}
 		else
 			Send(Message(403).addParam(name).addParam(":No such channel"), usr);
 	}
