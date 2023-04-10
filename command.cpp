@@ -282,14 +282,21 @@ Message Server::user(User &usr, const Message &req)
 		return Message(462).addParam(":You may not reregister");
 	if (req.params.size() < 4)
 		return Message(461).addParam("USER").addParam(":Not enough parameters");
-	bool registered = usr.isRegistered();
 	usr.username = req.params[0];
 	usr.hostname = req.params[1];
 	usr.servername = req.params[2];
 	usr.realname = req.params[3];
-	return !registered && usr.isRegistered()
-		? Message(1).addParam(":Welcome to the ft_irc Network")
-		: Message().setCommand("REPLY").addParam(":Your user info are set up");
+	if (!usr.isRegistered())
+		return Message().setCommand("REPLY").addParam(
+			":Your user info are set up");
+	Send(Message(1).addParam(usr.nickname).addParam(":Welcome to the ft_irc Network"),
+		 usr);
+	Send(Message(2).addParam("Your host is " + usr.servername +
+							 ", running version 1.0"),
+		 usr);
+	Send(Message(3).addParam("This server was created <datetime>"), usr);
+	return Message(4).addParam(
+		"<client> <servername> <version> <available user modes> <available channel modes> [<channel modes with a parameter>]");
 }
 
 Message Server::nick(User &usr, const Message &req)
@@ -304,12 +311,23 @@ Message Server::nick(User &usr, const Message &req)
 		return Message(433)
 			.addParam(req.params[0])
 			.addParam(":Nickname is already in use");
-	bool registered = usr.isRegistered();
+	// bool registered = usr.isRegistered();
 	usr.nickname = req.params[0];
-	return !registered && usr.isRegistered()
-		? Message(1).addParam(":Welcome to the ft_irc Network")
-		: Message().setCommand("REPLY").addParam(
-			  ":Your nickname has been changed");
+	// return !registered && usr.isRegistered()
+	// 	? Message(1).addParam(usr.nickname).addParam(":Welcome to the ft_irc Network")
+	// 	: Message().setCommand("REPLY").addParam(
+	// 		  ":Your nickname has been changed");
+	if (!usr.isRegistered())
+		return Message().setCommand("REPLY").addParam(
+			":Your user info are set up");
+	Send(Message(1).addParam(usr.nickname).addParam(":Welcome to the ft_irc Network"),
+		 usr);
+	Send(Message(2).addParam("Your host is " + usr.servername +
+							 ", running version 1.0"),
+		 usr);
+	Send(Message(3).addParam("This server was created <datetime>"), usr);
+	return Message(4).addParam(
+		"<client> <servername> <version> <available user modes> <available channel modes> [<channel modes with a parameter>]");
 }
 
 Message Server::privmsg(User &usr, const Message &req)
@@ -336,7 +354,10 @@ Message Server::privmsg(User &usr, const Message &req)
 			else
 			{
 				users.push_back(user);
-				Send(req, *user);
+				if (name == "Emet")
+					Send(bot.botTalk(usr, req.params[1]), usr);
+				else
+					Send(req, *user);
 			}
 		}
 		else if (Channel *chn = lookUpChannel(name))
@@ -423,6 +444,10 @@ Message Server::join(User &usr, const Message &req)
 		case 4:
 			Send(Message(400).addParam("JOIN").addParam(
 					 ":you're already on channel"),
+				 usr);
+			break;
+		case 5:
+			Send(Message(474).addParam(_ch).addParam(":Cannot join channel (+b)"),
 				 usr);
 			break;
 		}

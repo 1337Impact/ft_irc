@@ -30,7 +30,7 @@ Message::Message(std::string &msg)
 			;
 		if (msg[i] == ':')
 		{
-			std::string trailing(msg.begin() + i, msg.end());
+			std::string trailing(msg.begin() + i + 1, msg.end());
 			params.push_back(trailing);
 			break;
 		}

@@ -40,6 +40,7 @@ struct Message
 	std::vector<std::string> params;
 
 	friend class Server;
+	friend class Bot;
 	Message &addParam(const std::string &prm);
 	Message &setCommand(const std::string &cmd);
 	Message();
@@ -50,6 +51,7 @@ struct Message
 
 class User
 {
+protected:
 	bool hasSecret;
 	const int fd;
 	size_t nchannels;
@@ -66,6 +68,11 @@ class User
 	User(const int fd);
 	bool isRegistered() const;
 	static bool validNick(const std::string &nick);
+public:
+	std::string getNickName( void ) const
+	{
+		return this->nickname;
+	}
 };
 
 class Channel
@@ -161,6 +168,8 @@ class Channel
 			return (2);
 		if (members.size() == limit)
 			return (3);
+		if (find(banMasks.begin(), banMasks.end(), usr.nickname) != banMasks.end())
+			return (5);
 		else
 		{
 			usr.nchannels++;
@@ -216,6 +225,18 @@ class Channel
 	void remove(User *user)
 	{
 		members.erase(std::find(members.begin(), members.end(), *user));
+		bool oper_found = false;
+		for (std::vector<ChannelMember>::iterator it = members.begin(); it != members.end(); it++)
+		{
+			if (it->is_oper)
+			{
+				oper_found = true;
+				break;
+			}
+		}
+		if (!oper_found)
+			if (members.begin() != members.end())
+				members.begin()->is_oper = true;
 		user->nchannels--;
 	}
 	std::string getChannelModes() const
@@ -312,6 +333,30 @@ class Channel
 	}
 };
 
+class Bot : public User
+{
+private:
+    Message Hello(User &usr)
+    {
+        return Message().setPrefix(*this).setCommand("PRIVMSG").addParam("Hi " + usr.getNickName() + "! How can I assist you today?");
+    }
+public:
+	Bot()
+	:User(0){
+		nickname = "Emet";
+		username = "Emet";
+		hostname = "irc.42.com";
+		servername = "irc";
+		realname = "Emet Bot";
+	}
+    Message botTalk(User &usr, std::string msg){
+		std::cout << "botTalk" << std::endl;
+		if (msg == ":hello")
+			return Hello(usr);
+		return Message();
+	}
+};
+
 class Server
 {
 	const int tcpsock;
@@ -320,8 +365,9 @@ class Server
 	std::map<const int, User> users;
 	std::vector<Channel> channels;
 	std::vector<pollfd> cons;
+	Bot bot;
+	
 
-	~Server();
 	bool nickIsUsed(const std::string &nick) const;
 	Channel *lookUpChannel(const std::string &chn);
 	Message invite(User &usr, const Message &req);
@@ -340,6 +386,7 @@ class Server
 	Message user(User &usr, const Message &req);
 	Message dcc(User &usr, const Message &req);
 	Server(const int port, const std::string &name);
+	~Server();
 	User *lookUpUser(const std::string &nick);
 	void process(User &usr, const Message &req);
 	void receive(std::vector<pollfd>::const_iterator &con);
@@ -387,4 +434,6 @@ class SystemException : public std::system_error
 	{
 	}
 };
+
+
 #endif

@@ -1,6 +1,7 @@
 #include "ircserv.hpp"
 #include <fcntl.h>
 #include <unistd.h>
+#include <utility>
 
 unsigned Channel::FlagToMask[];
 
@@ -148,6 +149,7 @@ Server::Server(const int port, const std::string &pass)
 		throw SystemException("listen");
 	std::cout << "Listening on localhost:" << port << std::endl;
 	cons.push_back((pollfd){.fd = tcpsock, .events = POLLIN});
+	users.insert(std::make_pair(0, bot));
 }
 
 void Server::receive(std::vector<pollfd>::const_iterator &con)
