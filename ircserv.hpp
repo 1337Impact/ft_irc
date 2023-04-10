@@ -15,7 +15,7 @@
 	if (close(sockfd) == -1) \
 	BlockingError("close")
 #define ERR_UNKNOWNCOMMAND(cmd) \
-	Message(421).addParam(cmd).addParam(":Unknown command")
+	Message(421).addParam(cmd).addParam("Unknown command")
 #define QUIT(usr)                                         \
 	Message().setPrefix(usr).setCommand("QUIT").addParam( \
 		":User quit unexpectedly")
@@ -274,8 +274,8 @@ class Channel
 		std::cout << "param == " << add << std::endl;
 		mem->is_oper = add;
 		return add
-			? Message().setCommand("REPLY").addParam(":Operator has been added")
-			: Message().setCommand("REPLY").addParam(":Operator has been removed");
+			? Message().setCommand("REPLY").addParam("Operator has been added")
+			: Message().setCommand("REPLY").addParam("Operator has been removed");
 	}
 	const Message setChannelLimit(const std::string &limit, const bool add)
 	{
@@ -293,7 +293,7 @@ class Channel
 				":limit is below current members count");
 		return Message()
 			.setCommand("REPLY")
-			.addParam(":Limit has been set to")
+			.addParam("Limit has been set to")
 			.addParam(limit);
 	}
 	const Message setBanMask(const std::string &mask, const bool add)
@@ -301,7 +301,7 @@ class Channel
 		return add ? banMasks.push_back(mask)
 				   : (void)banMasks.erase(
 						 find(banMasks.begin(), banMasks.end(), mask)),
-			   Message().setCommand("REPLY").addParam(":Ban mask has been added");
+			   Message().setCommand("REPLY").addParam("Ban mask has been added");
 	}
 
 	const Message setSpeaker(const std::string &user, const bool add)
@@ -310,15 +310,15 @@ class Channel
 		{
 			if (User *mem = lookUpUser(user))
 				speakers.insert(mem);
-			return Message(401).addParam(name).addParam(":No such nick/channel");
+			return Message(401).addParam(name).addParam("No such nick/channel");
 		}
 		else
 		{
 			if (User *mem = lookUpUser(user))
 				speakers.erase(std::find(speakers.begin(), speakers.end(), mem));
-			return Message(401).addParam(name).addParam(":No such nick/channel");
+			return Message(401).addParam(name).addParam("No such nick/channel");
 		}
-		return Message().setCommand("REPLY").addParam(":Speaker has been added");
+		return Message().setCommand("REPLY").addParam("Speaker has been added");
 	}
 
 	const Message setSecret(const std::string &key, const bool add)
@@ -332,7 +332,7 @@ class Channel
 		}
 		else
 			this->key.clear();
-		return Message().setCommand("REPLY").addParam(":Secret has been set");
+		return Message().setCommand("REPLY").addParam("Secret has been set");
 	}
 	static bool isValidName(const std::string &name)
 	{
@@ -345,11 +345,11 @@ class Bot : public User
 private:
     Message Hello(User &usr)
     {
-        return Message().setPrefix(*this).setCommand("PRIVMSG").addParam(":Hi " + usr.getNickName() + "! How can I assist you today?");
+        return Message().setPrefix(*this).setCommand("PRIVMSG").addParam("Hi " + usr.getNickName() + "! How can I assist you today?");
     }
     Message Logtime(User &usr)
     {
-        return Message().setPrefix(*this).setCommand("PRIVMSG").addParam(":Your Logtime is: " + usr.getLogTime());
+        return Message().setPrefix(*this).setCommand("PRIVMSG").addParam("Your Logtime is: " + usr.getLogTime());
     }
 public:
 	Bot()

@@ -121,7 +121,7 @@ void Server::process(User &usr, const Message &req)
 	else if (req.command == "DCC")
 		Send(dcc(usr, req), usr);
 	else if (!req.command.empty())
-		Send(Message(421).addParam(req.command).addParam(":Unknown command"),
+		Send(Message(421).addParam(req.command).addParam("Unknown command"),
 			 usr);
 }
 
@@ -168,7 +168,7 @@ void Server::receive(std::vector<pollfd>::const_iterator &con)
 	else if (usr.buf.size() + nbytes > 512)
 	{
 		usr.buf.clear();
-		Send(Message(417).addParam(":Input line was too long"), usr);
+		Send(Message(417).addParam("Input line was too long"), usr);
 	}
 	else if (usr.buf.append(buf), usr.buf.size() >= 2)
 		while (true)

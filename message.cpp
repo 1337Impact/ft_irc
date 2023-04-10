@@ -50,8 +50,9 @@ std::string Message::totxt() const
 	if (!prefix.empty())
 		txt << prefix << ' ';
 	txt << command;
-	for (unsigned i = 0; i < params.size(); i++)
+	for (unsigned i = 0; i < params.size() - 1; i++)
 		txt << ' ' << params[i];
+	txt << " :" << params.back(); 
 	txt << "\r\n";
 	return txt.str();
 }
