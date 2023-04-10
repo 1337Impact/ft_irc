@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <utility>
+#include<ctime>
 
 unsigned Channel::FlagToMask[];
 
@@ -30,7 +31,7 @@ int main(int argc, char *argv[])
 	}
 }
 
-User::User(const int fd) : hasSecret(false), fd(fd), nchannels(0)
+User::User(const int fd) : hasSecret(false), fd(fd), nchannels(0), initTime(time(NULL))
 {
 }
 

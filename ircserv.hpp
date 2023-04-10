@@ -4,6 +4,8 @@
 #include <map>
 #include <netinet/in.h>
 #include <set>
+#include <string>
+#include <sys/_types/_size_t.h>
 #include <sys/poll.h>
 #include <vector>
 
@@ -61,6 +63,7 @@ protected:
 	std::string realname;
 	std::string servername;
 	std::string username;
+	size_t		initTime;
 
 	friend class Server;
 	friend struct Message;
@@ -72,6 +75,10 @@ public:
 	std::string getNickName( void ) const
 	{
 		return this->nickname;
+	}
+	std::string getLogTime(){
+		size_t logtime = time(NULL) - this->initTime;
+		return std::to_string(logtime / 60) + " minuts and " + std::to_string(logtime % 60) + " seconds";
 	}
 };
 
@@ -338,7 +345,11 @@ class Bot : public User
 private:
     Message Hello(User &usr)
     {
-        return Message().setPrefix(*this).setCommand("PRIVMSG").addParam("Hi " + usr.getNickName() + "! How can I assist you today?");
+        return Message().setPrefix(*this).setCommand("PRIVMSG").addParam(":Hi " + usr.getNickName() + "! How can I assist you today?");
+    }
+    Message Logtime(User &usr)
+    {
+        return Message().setPrefix(*this).setCommand("PRIVMSG").addParam(":Your Logtime is: " + usr.getLogTime());
     }
 public:
 	Bot()
@@ -351,8 +362,10 @@ public:
 	}
     Message botTalk(User &usr, std::string msg){
 		std::cout << "botTalk" << std::endl;
-		if (msg == ":hello")
+		if (msg == "hello")
 			return Hello(usr);
+		if (msg == "logtime")
+			return  Logtime(usr);
 		return Message();
 	}
 };
