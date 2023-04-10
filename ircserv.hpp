@@ -338,6 +338,7 @@ class Server
 	Message quit(User &usr, const Message &req);
 	Message topic(User &usr, const Message &req);
 	Message user(User &usr, const Message &req);
+	Message dcc(User &usr, const Message &req);
 	Server(const int port, const std::string &name);
 	User *lookUpUser(const std::string &nick);
 	void process(User &usr, const Message &req);
@@ -347,7 +348,8 @@ class Server
 		if (!res.command.empty())
 		{
 			const std::string _tmp = res.totxt();
-			if (std::cout << "Sending: " << '"' << _tmp << '"' << std::endl,
+			if (std::cout << "Sending to " << usr.nickname << ": " << '"'
+						  << _tmp << '"' << std::endl,
 				send(usr.fd, _tmp.data(), _tmp.size(), 0) == -1)
 				BlockingError("send");
 		}

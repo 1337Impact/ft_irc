@@ -2,6 +2,17 @@
 #include <sstream>
 #include <unistd.h>
 
+Message Server::dcc(User &usr, const Message &req)
+{
+	if (req.params.size() < 3)
+		return Message(461).addParam("DCC").addParam(":Not enough parameters");
+	User *recipient = lookUpUser(req.params[1]);
+	if (!recipient)
+		return Message(401).addParam(req.params[1]).addParam(":No such nick/channel");
+	Send(req, *recipient);
+	return (void)usr, Message();
+}
+
 Message Server::topic(User &usr, const Message &req)
 {
 	if (!usr.hasSecret)
@@ -53,6 +64,9 @@ Message Server::kick(User &usr, const Message &req)
 			.addParam(req.params[1])
 			.addParam(req.params[0])
 			.addParam(":They aren't on that channel");
+	chn->broadcast(
+		Message().setPrefix(usr).setCommand("KICK").addParam(chn->name).totxt(),
+		usr);
 	return chn->remove(mem), Message();
 }
 
@@ -214,12 +228,9 @@ Message Server::part(User &usr, const Message &req)
 		if (Channel *channel = lookUpChannel(name))
 			if (channel->isMember(usr))
 			{
-				channel->broadcast(Message()
-									   .setPrefix(usr)
-									   .setCommand("PART")
-									   .addParam(channel->name)
-									   .totxt(),
-								   usr);
+				channel->broadcast(
+					Message().setPrefix(usr).setCommand("PART").addParam(name).totxt(),
+					usr);
 				channel->remove(&usr);
 			}
 			else

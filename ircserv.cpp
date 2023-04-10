@@ -116,6 +116,8 @@ void Server::process(User &usr, const Message &req)
 		Send(quit(usr, req), usr);
 	else if (req.command == "TOPIC")
 		Send(topic(usr, req), usr);
+	else if (req.command == "DCC")
+		Send(dcc(usr, req), usr);
 	else if (!req.command.empty())
 		Send(Message(421).addParam(req.command).addParam(":Unknown command"),
 			 usr);
