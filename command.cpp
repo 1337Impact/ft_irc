@@ -314,8 +314,8 @@ Message Server::nick(User &usr, const Message &req)
 	// bool registered = usr.isRegistered();
 	usr.nickname = req.params[0];
 	// return !registered && usr.isRegistered()
-	// 	? Message(1).addParam(usr.nickname).addParam(":Welcome to the ft_irc Network")
-	// 	: Message().setCommand("REPLY").addParam(
+	// 	? Message(1).addParam(usr.nickname).addParam(":Welcome to the ft_irc
+	// Network") 	: Message().setCommand("REPLY").addParam(
 	// 		  ":Your nickname has been changed");
 	if (!usr.isRegistered())
 		return Message().setCommand("REPLY").addParam(
@@ -458,4 +458,14 @@ Message Server::join(User &usr, const Message &req)
 Message Server::notice(User &usr, const Message &req)
 {
 	return privmsg(usr, req), Message();
+}
+
+Message Server::ping(User &usr, const Message &req)
+{
+	return pong(usr, req);
+}
+
+Message Server::pong(User &usr, const Message &req)
+{
+	return (void)req, Message().setCommand("PONG").addParam(usr.nickname);
 }

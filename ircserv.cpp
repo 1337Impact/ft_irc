@@ -119,6 +119,10 @@ void Server::process(User &usr, const Message &req)
 		Send(topic(usr, req), usr);
 	else if (req.command == "DCC")
 		Send(dcc(usr, req), usr);
+	else if (req.command == "PING")
+		Send(ping(usr, req), usr);
+	else if (req.command == "PONG")
+		Send(pong(usr, req), usr);
 	else if (!req.command.empty())
 		Send(Message(421).addParam(req.command).addParam(":Unknown command"),
 			 usr);
