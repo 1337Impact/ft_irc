@@ -2,6 +2,7 @@
 #include <sstream>
 #include <unistd.h>
 
+<<<<<<< HEAD
 Message Server::dcc(User &usr, const Message &req)
 {
 	if (req.params.size() < 3)
@@ -13,6 +14,8 @@ Message Server::dcc(User &usr, const Message &req)
 	return (void)usr, Message();
 }
 
+=======
+>>>>>>> 2fcbf2c88860fd07afab1d1259de2edf8d4a73d2
 Message Server::topic(User &usr, const Message &req)
 {
 	if (!usr.hasSecret)
@@ -458,9 +461,4 @@ Message Server::join(User &usr, const Message &req)
 		}
 	}
 	return Message();
-}
-
-Message Server::notice(User &usr, const Message &req)
-{
-	return privmsg(usr, req), Message();
 }

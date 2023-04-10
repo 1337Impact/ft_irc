@@ -1,8 +1,8 @@
 #include "ircserv.hpp"
+#include <ctime>
 #include <fcntl.h>
 #include <unistd.h>
 #include <utility>
-#include<ctime>
 
 unsigned Channel::FlagToMask[];
 
@@ -31,7 +31,8 @@ int main(int argc, char *argv[])
 	}
 }
 
-User::User(const int fd) : hasSecret(false), fd(fd), nchannels(0), initTime(time(NULL))
+User::User(const int fd)
+	: hasSecret(false), fd(fd), nchannels(0), initTime(time(NULL))
 {
 }
 
@@ -99,7 +100,7 @@ void Server::process(User &usr, const Message &req)
 	else if (req.command == "PRIVMSG")
 		Send(privmsg(usr, req), usr);
 	else if (req.command == "NOTICE")
-		Send(notice(usr, req), usr);
+		Send((privmsg(usr, req), Message()), usr);
 	else if (req.command == "JOIN")
 		Send(join(usr, req), usr);
 	else if (req.command == "MODE")
@@ -118,8 +119,8 @@ void Server::process(User &usr, const Message &req)
 		Send(quit(usr, req), usr);
 	else if (req.command == "TOPIC")
 		Send(topic(usr, req), usr);
-	else if (req.command == "DCC")
-		Send(dcc(usr, req), usr);
+	else if (req.command == "PING")
+		Send(Message().setCommand("PONG").addParam(usr.nickname), usr);
 	else if (!req.command.empty())
 		Send(Message(421).addParam(req.command).addParam("Unknown command"),
 			 usr);

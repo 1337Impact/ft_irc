@@ -374,6 +374,7 @@ class Server
 {
 	const int tcpsock;
 	const std::string password;
+	const std::string name;
 	sockaddr_in serv;
 	std::map<const int, User> users;
 	std::vector<Channel> channels;
@@ -390,14 +391,12 @@ class Server
 	Message mode(User &usr, const Message &req);
 	Message names(User &usr, const Message &req);
 	Message nick(User &usr, const Message &req);
-	Message notice(User &usr, const Message &req);
 	Message part(User &usr, const Message &req);
 	Message pass(User &usr, const Message &req);
 	Message privmsg(User &usr, const Message &req);
 	Message quit(User &usr, const Message &req);
 	Message topic(User &usr, const Message &req);
 	Message user(User &usr, const Message &req);
-	Message dcc(User &usr, const Message &req);
 	Server(const int port, const std::string &name);
 	~Server();
 	User *lookUpUser(const std::string &nick);
