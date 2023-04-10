@@ -46,8 +46,6 @@ Message::Message(std::string &msg)
 
 std::string Message::totxt() const
 {
-	if (command.empty())
-		return "\r\n";
 	std::stringstream txt;
 	if (!prefix.empty())
 		txt << prefix << ' ';

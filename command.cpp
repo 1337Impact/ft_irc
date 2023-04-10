@@ -2,17 +2,6 @@
 #include <sstream>
 #include <unistd.h>
 
-Message Server::dcc(User &usr, const Message &req)
-{
-	if (req.params.size() < 3)
-		return Message(461).addParam("DCC").addParam(":Not enough parameters");
-	User *recipient = lookUpUser(req.params[1]);
-	if (!recipient)
-		return Message(401).addParam(req.params[1]).addParam(":No such nick/channel");
-	Send(req, *recipient);
-	return (void)usr, Message();
-}
-
 Message Server::topic(User &usr, const Message &req)
 {
 	if (!usr.hasSecret)
@@ -295,8 +284,13 @@ Message Server::user(User &usr, const Message &req)
 							 ", running version 1.0"),
 		 usr);
 	Send(Message(3).addParam("This server was created <datetime>"), usr);
-	return Message(4).addParam(
-		"<client> <servername> <version> <available user modes> <available channel modes> [<channel modes with a parameter>]");
+	Send(Message(4).addParam(
+			 usr.nickname +
+			 "localhost 1.0 [] {[+|-]|o|p|s|i|t|n|b|m|l|b|v|k} [<limit>] [<user>] [<ban mask>]"),
+		 usr);
+	Send(Message(372).addParam(usr.nickname).addParam(":<line of the motd>"),
+		 usr);
+	return Message(376).addParam(usr.nickname).addParam(":End of /MOTD command.");
 }
 
 Message Server::nick(User &usr, const Message &req)
@@ -311,12 +305,7 @@ Message Server::nick(User &usr, const Message &req)
 		return Message(433)
 			.addParam(req.params[0])
 			.addParam(":Nickname is already in use");
-	// bool registered = usr.isRegistered();
 	usr.nickname = req.params[0];
-	// return !registered && usr.isRegistered()
-	// 	? Message(1).addParam(usr.nickname).addParam(":Welcome to the ft_irc
-	// Network") 	: Message().setCommand("REPLY").addParam(
-	// 		  ":Your nickname has been changed");
 	if (!usr.isRegistered())
 		return Message().setCommand("REPLY").addParam(
 			":Your user info are set up");
@@ -326,8 +315,13 @@ Message Server::nick(User &usr, const Message &req)
 							 ", running version 1.0"),
 		 usr);
 	Send(Message(3).addParam("This server was created <datetime>"), usr);
-	return Message(4).addParam(
-		"<client> <servername> <version> <available user modes> <available channel modes> [<channel modes with a parameter>]");
+	Send(Message(4).addParam(
+			 usr.nickname +
+			 "localhost 1.0 [] {[+|-]|o|p|s|i|t|n|b|m|l|b|v|k} [<limit>] [<user>] [<ban mask>]"),
+		 usr);
+	Send(Message(372).addParam(usr.nickname).addParam(":<line of the motd>"),
+		 usr);
+	return Message(376).addParam(usr.nickname).addParam(":End of /MOTD command.");
 }
 
 Message Server::privmsg(User &usr, const Message &req)
@@ -453,19 +447,4 @@ Message Server::join(User &usr, const Message &req)
 		}
 	}
 	return Message();
-}
-
-Message Server::notice(User &usr, const Message &req)
-{
-	return privmsg(usr, req), Message();
-}
-
-Message Server::ping(User &usr, const Message &req)
-{
-	return pong(usr, req);
-}
-
-Message Server::pong(User &usr, const Message &req)
-{
-	return (void)req, Message().setCommand("PONG").addParam(usr.nickname);
 }
