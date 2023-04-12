@@ -2,7 +2,7 @@ NAME=ircserv
 
 FLAGS= -Wall -Wextra -Werror -std=c++98 -g
 
-SRCS= ircserv.cpp command.cpp message.cpp
+SRCS= ircserv.cpp command.cpp message.cpp channel.cpp
 
 HEADER= ircserv.hpp message.hpp
 

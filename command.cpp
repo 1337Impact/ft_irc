@@ -2,20 +2,6 @@
 #include <sstream>
 #include <unistd.h>
 
-<<<<<<< HEAD
-Message Server::dcc(User &usr, const Message &req)
-{
-	if (req.params.size() < 3)
-		return Message(461).addParam("DCC").addParam("Not enough parameters");
-	User *recipient = lookUpUser(req.params[1]);
-	if (!recipient)
-		return Message(401).addParam(req.params[1]).addParam("No such nick/channel");
-	Send(req, *recipient);
-	return (void)usr, Message();
-}
-
-=======
->>>>>>> 2fcbf2c88860fd07afab1d1259de2edf8d4a73d2
 Message Server::topic(User &usr, const Message &req)
 {
 	if (!usr.hasSecret)
@@ -196,7 +182,7 @@ Message Server::mode(User &usr, const Message &req)
 		return Message(403).addParam(req.params[0]).addParam("No such channel");
 	if (!chn->isOperator(usr))
 		return Message(482).addParam(chn->name).addParam(
-			":You're not channel operator");
+			"You're not channel operator");
 	if (req.params.empty())
 		return Message(324).addParam(chn->name).addParam(chn->getChannelModes());
 	if (!(req.params[1].size() <= 2) ||
@@ -213,7 +199,7 @@ Message Server::mode(User &usr, const Message &req)
 		: flag & SpeakerMask           ? chn->setSpeaker(req.params[2], set)
 		: flag & BanMask               ? chn->setBanMask(req.params[2], set)
 		: flag & ChannelLimitMask ? chn->setChannelLimit(req.params[2], set)
-		: flag & OperatorMask     ? chn->setSecret(req.params[2], set)
+		: flag & OperatorMask     ? chn->addOperator(req.params[2], set)
 								  : Message();
 	return set ? chn->modes |= flag : chn->modes &= ~flag, res;
 }
@@ -238,7 +224,7 @@ Message Server::part(User &usr, const Message &req)
 			}
 			else
 				Send(Message(442).addParam(name).addParam(
-						 ":You're not on that channel"),
+						 "You're not on that channel"),
 					 usr);
 		else
 			Send(Message(403).addParam(name).addParam("No such channel"), usr);
@@ -289,11 +275,10 @@ Message Server::user(User &usr, const Message &req)
 	usr.servername = req.params[2];
 	usr.realname = req.params[3];
 	if (!usr.isRegistered())
-		return Message().setCommand("REPLY").addParam(
-			":Your user info are set up");
+		return Message().setCommand("REPLY").addParam("Your user info are set up");
 	Send(Message(1).addParam(usr.nickname).addParam("Welcome to the ft_irc Network"),
 		 usr);
-	Send(Message(2).addParam("Your host is " + usr.servername +
+	Send(Message(2).addParam("Your host is " + usr.hostname +
 							 ", running version 1.0"),
 		 usr);
 	Send(Message(3).addParam("This server was created <datetime>"), usr);
@@ -301,8 +286,7 @@ Message Server::user(User &usr, const Message &req)
 			 usr.nickname +
 			 " localhost 1.0 [] {[+|-]|o|p|s|i|t|n|b|m|l|b|v|k} [<limit>] [<user>] [<ban mask>]"),
 		 usr);
-	Send(Message(372).addParam(usr.nickname).addParam("<line of the motd>"),
-		 usr);
+	Send(Message(372).addParam(usr.nickname).addParam("<line of the motd>"), usr);
 	return Message(376).addParam(usr.nickname).addParam("End of /MOTD command.");
 }
 
@@ -321,20 +305,18 @@ Message Server::nick(User &usr, const Message &req)
 	bool isRegistered = usr.isRegistered();
 	usr.nickname = req.params[0];
 	if (isRegistered || !usr.isRegistered())
-		return Message().setCommand("REPLY").addParam(
-			"Your user info are set up");
+		return Message().setCommand("REPLY").addParam("Your user info are set up");
 	Send(Message(1).addParam(usr.nickname).addParam("Welcome to the ft_irc Network"),
 		 usr);
-	Send(Message(2).addParam("Your host is " + usr.servername +
+	Send(Message(2).addParam("Your host is " + usr.hostname +
 							 ", running version 1.0"),
 		 usr);
-	Send(Message(3).addParam("This server was created <datetime>"), usr);
+	Send(Message(3).addParam("This server was created 20/03/2023"), usr);
 	Send(Message(4).addParam(
 			 usr.nickname +
 			 " localhost 1.0 [] {[+|-]|o|p|s|i|t|n|b|m|l|b|v|k} [<limit>] [<user>] [<ban mask>]"),
 		 usr);
-	Send(Message(372).addParam(usr.nickname).addParam("<line of the motd>"),
-		 usr);
+	Send(Message(372).addParam(usr.nickname).addParam("<line of the motd>"), usr);
 	return Message(376).addParam(usr.nickname).addParam("End of /MOTD command.");
 }
 
@@ -372,19 +354,19 @@ Message Server::privmsg(User &usr, const Message &req)
 		{
 			if (find(channels.begin(), channels.end(), chn) != channels.end())
 				Send(Message(407).addParam(name).addParam(
-						 ":Duplicate recipients. No message delivered"),
+						 "Duplicate recipients. No message delivered"),
 					 usr);
 			else if (channels.push_back(chn),
 					 (chn->hasNoExternalMessages() && !chn->isMember(usr)) ||
 						 (chn->isModerated() && !chn->isSpeaker(usr) &&
 						  !chn->isOperator(usr)))
-				(chn->isSecret() || chn->isPrivate()) && !chn->isMember(usr) &&
-						!chn->isSpeaker(usr)
+				(chn->isSecret() || chn->isPrivate()) &&
+						!chn->isMember(usr) && !chn->isSpeaker(usr)
 					? Send(Message(401).addParam(name).addParam(
-							   ":No such nick/channel"),
+							   "No such nick/channel"),
 						   usr)
 					: Send(Message(404).addParam(name).addParam(
-							   ":Cannot send to channel"),
+							   "Cannot send to channel"),
 						   usr);
 			else
 				chn->broadcast(req.totxt(), usr);
@@ -411,7 +393,8 @@ Message Server::join(User &usr, const Message &req)
 	{
 		int _isKey = req.params.size() > 1 ? !!std::getline(_ss2, _key, ',') : 0;
 		if (!Channel::isValidName(_ch))
-			Send(Message(476).addParam(_ch).addParam("Bad Channel Mask"), usr);
+			return Message(479).addParam(_ch).addParam("Invalid channel name.");
+
 		std::vector<Channel>::iterator channelIterator =
 			std::find(channels.begin(), channels.end(), _ch);
 		int status = 0;
@@ -451,12 +434,15 @@ Message Server::join(User &usr, const Message &req)
 			break;
 		case 4:
 			Send(Message(400).addParam("JOIN").addParam(
-					 ":you're already on channel"),
+					 "you're already on channel"),
 				 usr);
 			break;
 		case 5:
 			Send(Message(474).addParam(_ch).addParam("Cannot join channel (+b)"),
 				 usr);
+			break;
+		case 6:
+			Send(Message(403).addParam(_ch).addParam("No such channel"), usr);
 			break;
 		}
 	}

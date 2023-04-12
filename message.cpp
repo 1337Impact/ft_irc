@@ -1,4 +1,5 @@
 #include "ircserv.hpp"
+#include <algorithm>
 #include <sstream>
 
 Message &Message::setCommand(const std::string &cmd)
@@ -7,7 +8,6 @@ Message &Message::setCommand(const std::string &cmd)
 	return *this;
 }
 
-// parse request
 Message::Message(std::string &msg)
 {
 	size_t i = 0;
@@ -52,7 +52,14 @@ std::string Message::totxt() const
 	txt << command;
 	for (unsigned i = 0; i < params.size() - 1; i++)
 		txt << ' ' << params[i];
-	txt << " :" << params.back(); 
+	if (!params.empty())
+	{
+		txt << ' ';
+		if (find(params.back().begin(), params.back().end(), ' ') !=
+			params.back().end())
+			txt << ':';
+		txt << params.back();
+	}
 	txt << "\r\n";
 	return txt.str();
 }

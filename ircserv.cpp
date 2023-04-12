@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
 		Channel::FlagToMask[(int)'b'] = BanMask;
 		Channel::FlagToMask[(int)'i'] = InviteOnlyMask;
 		Channel::FlagToMask[(int)'k'] = SecretKeyMask;
-		Channel::FlagToMask[(int)'k'] = SecretMask;
+		Channel::FlagToMask[(int)'s'] = SecretMask;
 		Channel::FlagToMask[(int)'l'] = ChannelLimitMask;
 		Channel::FlagToMask[(int)'m'] = ModeratedMask;
 		Channel::FlagToMask[(int)'n'] = NoExternalMessagesMask;
@@ -121,6 +121,8 @@ void Server::process(User &usr, const Message &req)
 		Send(topic(usr, req), usr);
 	else if (req.command == "PING")
 		Send(Message().setCommand("PONG").addParam(usr.nickname), usr);
+	else if (req.command == "AWAY" || req.command == "WHO" || req.command == "WHOIS")
+		Send(Message(), usr);
 	else if (!req.command.empty())
 		Send(Message(421).addParam(req.command).addParam("Unknown command"),
 			 usr);
@@ -236,5 +238,37 @@ void Server::eventloop()
 				evts--;
 				receive(con);
 			}
+	}
+}
+
+void Server::Send(const Message &res, const User &usr)
+{
+	if (!res.command.empty())
+	{
+		const std::string _tmp = res.totxt();
+		if (std::cout << "Sending to " << usr.nickname << ": " << '"'
+						<< _tmp << '"' << std::endl,
+			send(usr.fd, _tmp.data(), _tmp.size(), 0) == -1)
+			BlockingError("send");
+	}
+}
+
+void Server::sendChannelMemberList(const Channel *chn, User &usr)
+{
+	if ((!chn->isPrivate() && !chn->isSecret()) ||
+		(chn->isPrivate() && chn->isMember(usr)))
+	{
+		Message res = Message(353)
+							.addParam(chn->isPrivate()      ? "*"
+										: chn->isSecret() ? "@"
+															: "=")
+							.addParam(chn->name);
+		for (std::vector<Channel::ChannelMember>::const_iterator it =
+					chn->members.begin();
+				it != chn->members.end();
+				it++)
+			res.params.size() == 2 ? res.addParam(':' + it->usr.nickname)
+									: res.addParam(it->usr.nickname);
+		Send(res, usr);
 	}
 }
